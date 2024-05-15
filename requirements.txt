@@ -1,0 +1,8 @@
+#pip install -r requirements.txt
+pyomo
+pandas
+xlsxwriter
+streamlit
+streamlit_pdf_viewer
+matplotlib
+plotly
