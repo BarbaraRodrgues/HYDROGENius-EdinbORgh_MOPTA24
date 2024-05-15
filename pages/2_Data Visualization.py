@@ -17,7 +17,7 @@ def get_day(row):
 #-------------------------------------------------------------------------------
 st.set_page_config(page_title="Data Visualization", page_icon=":zap:",
                    layout="wide", initial_sidebar_state="expanded")
-st.title('Data Visualisation')
+st.title('Data Visualization')
 
 # Gloabal Data Parameters
 inst_data = st.session_state.get('inst_data')
