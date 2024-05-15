@@ -14,9 +14,6 @@ def get_day(row):
             return df_row['day_id']
     return None
 
-# TODO
-# 4. Check units of all legends
-
 #-------------------------------------------------------------------------------
 st.set_page_config(page_title="Data Visualization", page_icon=":zap:",
                    layout="wide", initial_sidebar_state="expanded")

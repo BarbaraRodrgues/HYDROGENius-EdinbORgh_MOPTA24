@@ -5,10 +5,6 @@ import pandas as pd
 import math
 import plotly.express as px
 
-# TODO Alternative for more interactive plots
-# import plotly.express as px
-# TODO Check SOC tank constraints boundary
-
 #-------------------------------------------------------------------------------
 # Auxiliary Functions
 def millify(n):
@@ -228,7 +224,6 @@ else:
         df2 = -df2 
         # Get charge and discharge data together
         df = df1.join(df2).reset_index()
-        # TODO Check that either charge or discharge is positive (after model is solved)
         # New column to combine charge and discharge together
         df['Charged (MW)'] = np.where(df['storageGasCharge'] > 0, df['storageGasCharge'], df['storageGasDischarge'])
         # Create a new columns 'Day' and 'Time Period'
@@ -272,7 +267,6 @@ else:
         df2 = -df2 
         # Get charge and discharge data together
         df = df1.join(df2).reset_index()
-        # TODO Check that either charge or discharge is positive (after model is solved)
         # New column to combine charge and discharge together
         df['Charged (MW)'] = np.where(df['storageLiquidCharge'] > 0, df['storageLiquidCharge'], df['storageLiquidDischarge'])
         # Create a new columns 'Day' and 'Time Period'

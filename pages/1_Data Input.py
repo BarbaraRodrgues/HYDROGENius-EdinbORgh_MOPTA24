@@ -70,7 +70,7 @@ if instance_type == "**User-defined Data**":
 
     # Download Instance Template
     cwd = os.getcwd()
-    xlxs_name = 'Instances/template_instance.xlsx' # TODO Replace with templace
+    xlxs_name = 'Instances/template_instance.xlsx'
     xlxs_path = os.path.join(cwd, xlxs_name)
     col2.write('Download Template File Below')
     with open(xlxs_path, "rb") as f:
