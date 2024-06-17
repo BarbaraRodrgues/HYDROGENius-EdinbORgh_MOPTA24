@@ -267,13 +267,71 @@ class InstanceMOPTA():
         self.storageLiquidDischarge = pd.DataFrame.from_dict(model.storageLiquidDischarge.extract_values(), orient='index', columns=['storageLiquidDischarge'])
         self.storageLiquidDischarge.index = pd.MultiIndex.from_tuples(self.storageLiquidDischarge.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
 
-class ModelMOPTA(pyo.AbstractModel):    
-    def __init__(self,**kwds):
+class ModelMOPTA(gp.Model):    
+    def __init__(self, instance:InstanceMOPTA, **kwds):
         super().__init__(**kwds)
-        self.__build_parameters()
+        self.__inst = instance
+        #self.__build_parameters()
         self.__build_variables()
         self.__build_constraints()
         self.__build_objective()
+        self.update()
+    
+    @property
+    def inst(self):
+        return self.__inst
+    
+    @property
+    def buildNumSolar(self):
+        return self.__buildNumSolar
+    @property
+    def buildNumWind(self):
+        return self.__buildNumWind
+    @property
+    def buildNumStorageGas(self):
+        return self.__buildNumStorageGas
+    @property
+    def buildNumStorageLiquid(self):
+        return self.__buildNumStorageLiquid
+    @property
+    def flowElectricity(self):
+        return self.__flowElectricity
+    @property
+    def flowGas(self):
+        return self.__flowGas
+    @property
+    def flowLiquid(self):
+        return self.__flowLiquid
+    @property
+    def lossLoadElectricity(self):
+        return self.__lossLoadElectricity
+    @property
+    def lossLoadGas(self):
+        return self.__lossLoadGas
+    @property
+    def generationRenewable(self):
+        return self.__generationRenewable
+    @property
+    def spillRenewable(self):
+        return self.__spillRenewable
+    @property
+    def storageGasSoc(self):
+        return self.__storageGasSoc
+    @property
+    def storageGasCharge(self):
+        return self.__storageGasCharge
+    @property
+    def storageGasDischarge(self):
+        return self.__storageGasDischarge
+    @property
+    def storageLiquidSoc(self):
+        return self.__storageLiquidSoc
+    @property
+    def storageLiquidCharge(self):
+        return self.__storageLiquidCharge
+    @property
+    def storageLiquidDischarge(self):
+        return self.__storageLiquidDischarge
 
     def __build_parameters(self):
         # Sets-------------------------------------------------------------------------
@@ -290,7 +348,7 @@ class ModelMOPTA(pyo.AbstractModel):
         self.ElectrolyzerNodes = pyo.Set()
         self.FuelCellNodes     = pyo.Set()
         self.TankNodes         = pyo.Set()
-
+        
         self.startPeriodOfDay = pyo.Param(self.Days, within=self.TimePeriods)
         self.endPeriodOfDay   = pyo.Param(self.Days, within=self.TimePeriods)
         
@@ -341,72 +399,72 @@ class ModelMOPTA(pyo.AbstractModel):
         self.effDischargingStorageLiquid = pyo.Param(self.TankNodes, within=pyo.PercentFraction)
 
     def __build_variables(self):
-        # First Stage Decisions
-        self.buildNumSolar = pyo.Var(self.SolarNodes, within=pyo.NonNegativeIntegers)
-        self.buildNumWind  = pyo.Var(self.WindNodes, within=pyo.NonNegativeIntegers)
-        self.buildNumStorageGas     = pyo.Var(self.ElectrolyzerNodes, within=pyo.NonNegativeIntegers)
-        self.buildNumStorageLiquid  = pyo.Var(self.TankNodes, within=pyo.NonNegativeIntegers)
+        # First Stage Decisions      
+        self.__buildNumSolar = self.addVars(self.inst.SolarNodes, vtype=GRB.INTEGER)
+        self.__buildNumWind  = self.addVars(self.inst.WindNodes, vtype=GRB.INTEGER)
+        self.__buildNumStorageGas    = self.addVars(self.inst.ElectrolyzerNodes, vtype=GRB.INTEGER)
+        self.__buildNumStorageLiquid = self.addVars(self.inst.TankNodes, vtype=GRB.INTEGER)
         
         # Flow Decisions
-        self.flowElectricity = pyo.Var(self.Nodes, self.Nodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.flowGas         = pyo.Var(self.Nodes, self.Nodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.flowLiquid      = pyo.Var(self.Nodes, self.Nodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
+        self.__flowElectricity = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__flowGas         = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__flowLiquid      = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
 
-        self.lossLoadElectricity = pyo.Var(self.LoadNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.lossLoadGas         = pyo.Var(self.IndustrialNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
+        self.__lossLoadElectricity = self.addVars(self.inst.LoadNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__lossLoadGas         = self.addVars(self.inst.IndustrialNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
 
         # Generation Decision
-        self.generationRenewable = pyo.Var(self.RenewableNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.spillRenewable      = pyo.Var(self.RenewableNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
+        self.__generationRenewable = self.addVars(self.inst.RenewableNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__spillRenewable      = self.addVars(self.inst.RenewableNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
 
         # Storage Decisions
-        self.storageGasSoc       = pyo.Var(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.storageGasCharge    = pyo.Var(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.storageGasDischarge = pyo.Var(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
+        self.__storageGasSoc       = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__storageGasCharge    = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__storageGasDischarge = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
 
-        self.storageLiquidSoc       = pyo.Var(self.TankNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.storageLiquidCharge    = pyo.Var(self.TankNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.storageLiquidDischarge = pyo.Var(self.TankNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
+        self.__storageLiquidSoc       = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__storageLiquidCharge    = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__storageLiquidDischarge = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
 
     def __build_constraints(self):
         # First Stage Constraints
-        self.CbuildSolarBound = pyo.Constraint(self.SolarNodes, rule=cons_build_solar_bound)
-        self.CbuildWindBound  = pyo.Constraint(self.WindNodes, rule=cons_build_wind_bound)
+        self.addConstrs((cons_build_solar_bound(self, i) for i in self.inst.SolarNodes), name="CbuildSolarBound")
+        self.addConstrs((cons_build_wind_bound(self, i) for i in self.inst.WindNodes), name="CbuildWindBound")
 
         # Flow Balance Constraints
-        self.CflowBalanceLoads  = pyo.Constraint(self.LoadNodes, self.TimePeriods, self.Scenarios, rule=cons_flow_balance_loads)
-        self.CflowBalanceGasLoads  = pyo.Constraint(self.IndustrialNodes, self.TimePeriods, self.Scenarios, rule=cons_flow_balance_gas_loads)
+        self.addConstrs((cons_flow_balance_loads(self, i, t, s) for i in self.inst.LoadNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceLoads")
+        self.addConstrs((cons_flow_balance_gas_loads(self, i, t, s) for i in self.inst.IndustrialNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceGasLoads")
 
-        self.CflowBalanceRenewables  = pyo.Constraint(self.RenewableNodes, self.TimePeriods, self.Scenarios, rule=cons_flow_balance_renewables)
-        self.renewableGenerationDef  = pyo.Constraint(self.RenewableNodes, self.TimePeriods, self.Scenarios, rule=cons_renewable_generation_def)
-
-        self.CflowBalanceElectrolyzers  = pyo.Constraint(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, rule=cons_flow_balance_electrolyzers)
-        self.CflowBalanceTanks          = pyo.Constraint(self.TankNodes, self.TimePeriods, self.Scenarios, rule=cons_flow_balance_tanks)
-        self.CflowBalanceFuelCells      = pyo.Constraint(self.FuelCellNodes, self.TimePeriods, self.Scenarios, rule=cons_flow_balance_fuelcells)
+        self.addConstrs((cons_flow_balance_renewables(self, i, t, s) for i in self.inst.RenewableNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceRenewables")
+        self.addConstrs((cons_renewable_generation_def(self, i, t, s) for i in self.inst.RenewableNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="renewableGenerationDef")
+        
+        self.addConstrs((cons_flow_balance_electrolyzers(self, i, t, s) for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceElectrolyzers")
+        self.addConstrs((cons_flow_balance_tanks(self, i, t, s) for i in self.inst.TankNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceTanks")
+        self.addConstrs((cons_flow_balance_fuelcells(self, i, t, s) for i in self.inst.FuelCellNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceFuelCells")
         
         # Battery Constraints
-        self.CstorageLiquidUpdate = pyo.Constraint(self.TankNodes, self.TimePeriods, self.Scenarios, rule=cons_soc_update_storage_liquid)
-        self.CstorageGasUpdate = pyo.Constraint(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, rule=cons_soc_update_storage_gas)
+        self.addConstrs((cons_soc_update_storage_liquid(self, i, t, s) for i in self.inst.TankNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CstorageLiquidUpdate")
+        self.addConstrs((cons_soc_update_storage_gas(self, i, t, s) for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CstorageGasUpdate")
 
-        self.CmaxStorageLiquid = pyo.Constraint(self.TankNodes, self.TimePeriods, self.Scenarios, rule=cons_max_capacity_storage_liquid)
-        self.CmaxStorageGas    = pyo.Constraint(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, rule=cons_max_capacity_storage_gas)
+        self.addConstrs((cons_max_capacity_storage_liquid(self, i, t, s) for i in self.inst.TankNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxStorageLiquid")
+        self.addConstrs((cons_max_capacity_storage_gas(self, i, t, s) for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxStorageGas")
 
-        self.CmaxChargeLiquid    = pyo.Constraint(self.TankNodes, self.TimePeriods, self.Scenarios, rule=cons_max_liquid_charge_bound)
-        self.CmaxDischargeLiquid = pyo.Constraint(self.TankNodes, self.TimePeriods, self.Scenarios, rule=cons_max_liquid_discharge_bound)
-        self.CmaxChargeGas       = pyo.Constraint(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, rule=cons_max_gas_charge_bound)
-        self.CmaxDischargeGas    = pyo.Constraint(self.ElectrolyzerNodes, self.TimePeriods, self.Scenarios, rule=cons_max_gas_discharge_bound)
+        self.addConstrs((cons_max_liquid_charge_bound(self, i, t, s) for i in self.inst.TankNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxChargeLiquid")
+        self.addConstrs((cons_max_liquid_discharge_bound(self, i, t, s) for i in self.inst.TankNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxDischargeLiquid")
+        self.addConstrs((cons_max_gas_charge_bound(self, i, t, s) for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxChargeGas")
+        self.addConstrs((cons_max_gas_discharge_bound(self, i, t, s) for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxDischargeGas")
 
         # Loss of Load Contraints
-        self.CmaxLossLoadElectricity = pyo.Constraint(self.Scenarios, rule=cons_max_loss_load_electricity)
-        self.CmaxLossLoadGas         = pyo.Constraint(self.Scenarios, rule=cons_max_loss_load_gas)
+        self.addConstrs((cons_max_loss_load_electricity(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadElectricity")
+        self.addConstrs((cons_max_loss_load_gas(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadGas")
 
         # Bound Contraints
-        self.CmaxFlowElectricity = pyo.Constraint(self.Nodes, self.Nodes, self.TimePeriods, self.Scenarios, rule=cons_max_flow_electricity)
-        self.CmaxFlowGas         = pyo.Constraint(self.Nodes, self.Nodes, self.TimePeriods, self.Scenarios, rule=cons_max_flow_gas)
-        self.CmaxFlowLiquid      = pyo.Constraint(self.Nodes, self.Nodes, self.TimePeriods, self.Scenarios, rule=cons_max_flow_liquid)
+        self.addConstrs((cons_max_flow_electricity(self, i, j, t, s) for i in self.inst.Nodes for j in self.inst.Nodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxFlowElectricity")
+        self.addConstrs((cons_max_flow_gas(self, i, j, t, s) for i in self.inst.Nodes for j in self.inst.Nodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxFlowGas")
+        self.addConstrs((cons_max_flow_liquid(self, i, j, t, s) for i in self.inst.Nodes for j in self.inst.Nodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxFlowLiquid")
 
     def __build_objective(self):
-        self.Objective_Cost = pyo.Objective(rule=obj_cost, sense=pyo.minimize)
+        self.setObjective(obj_cost, GRB.MINIMIZE)
 
     def build_inst(self, inst:InstanceMOPTA):
         # Create a dictionary of data in pyomo's format    
@@ -487,119 +545,128 @@ class ModelMOPTA(pyo.AbstractModel):
 #------------------------------------------------------------------------------
 
 def cons_build_solar_bound(m:ModelMOPTA, i:int):
-    return m.buildNumSolar[i] <= m.capacitySolar[i]
+    return m.buildNumSolar[i] <= m.inst.capacitySolar[i]
 
 def cons_build_wind_bound(m:ModelMOPTA, i:int):
-    return m.buildNumWind[i] <= m.capacityWind[i]
+    return m.buildNumWind[i] <= m.inst.capacityWind[i]
 
 def cons_flow_balance_loads(m:ModelMOPTA, i:int, t:int, s:int):
-    inflow = sum(m.flowElectricity[j,i,t,s] for j in m.Nodes) + m.lossLoadElectricity[i,t,s] 
-    outflow = sum(m.flowElectricity[i,j,t,s] for j in m.Nodes) + m.demandElectricity[i,t]
+    inflow = sum(m.flowElectricity[j,i,t,s] for j in m.inst.Nodes) + m.lossLoadElectricity[i,t,s] 
+    outflow = sum(m.flowElectricity[i,j,t,s] for j in m.inst.Nodes) + m.inst.demandElectricity[i,t]
     return inflow == outflow
 
 def cons_flow_balance_renewables(m:ModelMOPTA, i:int, t:int, s:int):
-    inflow = sum(m.flowElectricity[j,i,t,s] for j in m.Nodes) + m.generationRenewable[i,t,s] 
-    outflow = sum(m.flowElectricity[i,j,t,s] for j in m.Nodes) + m.spillRenewable[i,t,s]
+    inflow = sum(m.flowElectricity[j,i,t,s] for j in m.inst.Nodes) + m.generationRenewable[i,t,s] 
+    outflow = sum(m.flowElectricity[i,j,t,s] for j in m.inst.Nodes) + m.spillRenewable[i,t,s]
     return inflow == outflow
 
 def cons_renewable_generation_def(m:ModelMOPTA, i:int, t:int, s:int):
-    if i in m.SolarNodes:
-        rhs = m.generationSolar[i,t,s] * m.buildNumSolar[i]
-    elif i in m.WindNodes:
-        rhs = m.generationWind[i,t,s] * m.buildNumWind[i]
+    if i in m.inst.SolarNodes:
+        rhs = m.inst.generationSolar[i,t,s] * m.buildNumSolar[i]
+    elif i in m.inst.WindNodes:
+        rhs = m.inst.generationWind[i,t,s] * m.buildNumWind[i]
     else:
         rhs = 0
     return m.generationRenewable[i,t,s] == rhs
 
 def cons_flow_balance_gas_loads(m:ModelMOPTA, i:int, t:int, s:int):
-    inflow = sum(m.flowGas[j,i,t,s] for j in m.Nodes) + m.lossLoadGas[i,t,s] 
-    outflow = sum(m.flowGas[i,j,t,s] for j in m.Nodes) + m.demandGas[i,t]
+    inflow = sum(m.flowGas[j,i,t,s] for j in m.inst.Nodes) + m.lossLoadGas[i,t,s] 
+    outflow = sum(m.flowGas[i,j,t,s] for j in m.inst.Nodes) + m.inst.demandGas[i,t]
     return inflow == outflow
 
 def cons_flow_balance_electrolyzers(m:ModelMOPTA, i:int, t:int, s:int):
-    electflow = sum(m.flowElectricity[j,i,t,s] for j in m.Nodes)
-    gasflow = m.conversionElectricityGas * m.efficiencyElectrolysis * (sum(m.flowGas[i,j,t,s] for j in m.Nodes) + m.storageGasCharge[i,t,s] - m.storageGasDischarge[i,t,s])
+    electflow = sum(m.flowElectricity[j,i,t,s] for j in m.inst.Nodes)
+    gasflow = m.inst.conversionElectricityGas * m.inst.efficiencyElectrolysis * (sum(m.flowGas[i,j,t,s] for j in m.inst.Nodes) + m.storageGasCharge[i,t,s] - m.storageGasDischarge[i,t,s])
     return electflow == gasflow
 
 def cons_flow_balance_tanks(m:ModelMOPTA, i:int, t:int, s:int):
-    inflow = sum(m.flowGas[j,i,t,s] for j in m.Nodes)
-    outflow = m.conversionGasLiquid * m.efficiencyLiquefaction * (sum(m.flowLiquid[i,j,t,s] for j in m.Nodes) + m.storageLiquidCharge[i,t,s] - m.storageLiquidDischarge[i,t,s])
+    inflow = sum(m.flowGas[j,i,t,s] for j in m.inst.Nodes)
+    outflow = m.inst.conversionGasLiquid * m.inst.efficiencyLiquefaction * (sum(m.flowLiquid[i,j,t,s] for j in m.inst.Nodes) + m.storageLiquidCharge[i,t,s] - m.storageLiquidDischarge[i,t,s])
     return inflow == outflow
 
 def cons_flow_balance_fuelcells(m:ModelMOPTA, i:int, t:int, s:int):
-    inflow = m.efficiencyGasification * (sum(m.flowGas[j,i,t,s] for j in m.Nodes) + m.conversionGasLiquid * sum(m.flowLiquid[j,i,t,s] for j in m.Nodes))
-    outflow = sum(m.flowGas[i,j,t,s] for j in m.Nodes) + sum(m.flowElectricity[i,j,t,s] for j in m.Nodes)/m.conversionElectricityGas
+    inflow = m.inst.efficiencyGasification * (sum(m.flowGas[j,i,t,s] for j in m.inst.Nodes) + m.inst.conversionGasLiquid * sum(m.flowLiquid[j,i,t,s] for j in m.inst.Nodes))
+    outflow = sum(m.flowGas[i,j,t,s] for j in m.inst.Nodes) + sum(m.flowElectricity[i,j,t,s] for j in m.inst.Nodes)/m.inst.conversionElectricityGas
     return inflow == outflow
 
 def cons_soc_update_storage_liquid(m:ModelMOPTA, i:int, t:int, s:int):
-    if t == min(m.TimePeriods):
-        t_final = max(m.TimePeriods)
-        charged = m.effChargingStorageLiquid[i] * m.storageLiquidCharge[i,t_final,s]
-        discharged = 1/m.effDischargingStorageLiquid[i] * m.storageLiquidDischarge[i,t_final,s]
-        return m.storageLiquidSoc[i,t,s] == (1 - m.selfDischargeStorageLiquid[i]) * m.storageLiquidSoc[i,t_final,s] + charged - discharged
+    if t == min(m.inst.TimePeriods):
+        t_final = max(m.inst.TimePeriods)
+        charged = m.inst.effChargingStorageLiquid[i] * m.storageLiquidCharge[i,t_final,s]
+        discharged = 1/m.inst.effDischargingStorageLiquid[i] * m.storageLiquidDischarge[i,t_final,s]
+        return m.storageLiquidSoc[i,t,s] == (1 - m.inst.selfDischargeStorageLiquid[i]) * m.storageLiquidSoc[i,t_final,s] + charged - discharged
     else:
-        charged = m.effChargingStorageLiquid[i] * m.storageLiquidCharge[i,t-1,s]
-        discharged = 1/m.effDischargingStorageLiquid[i] * m.storageLiquidDischarge[i,t-1,s]
-        return m.storageLiquidSoc[i,t,s] == (1 - m.selfDischargeStorageLiquid[i]) * m.storageLiquidSoc[i,t-1,s] + charged - discharged
+        charged = m.inst.effChargingStorageLiquid[i] * m.storageLiquidCharge[i,t-1,s]
+        discharged = 1/m.inst.effDischargingStorageLiquid[i] * m.storageLiquidDischarge[i,t-1,s]
+        return m.storageLiquidSoc[i,t,s] == (1 - m.inst.selfDischargeStorageLiquid[i]) * m.storageLiquidSoc[i,t-1,s] + charged - discharged
 
 def cons_soc_update_storage_gas(m:ModelMOPTA, i:int, t:int, s:int):
-    for d in m.Days:
-        if t == m.startPeriodOfDay[d]:
-            t_final = m.endPeriodOfDay[d]
-            charged = m.effChargingStorageGas[i] * m.storageGasCharge[i,t_final,s]
-            discharged = 1/m.effDischargingStorageGas[i] * m.storageGasDischarge[i,t_final,s]
-            return m.storageGasSoc[i,t,s] == (1 - m.selfDischargeStorageGas[i]) * m.storageGasSoc[i,t_final,s] + charged - discharged
+    for d in m.inst.Days:
+        if t == m.inst.startPeriodOfDay[d]:
+            t_final = m.inst.endPeriodOfDay[d]
+            charged = m.inst.effChargingStorageGas[i] * m.storageGasCharge[i,t_final,s]
+            discharged = 1/m.inst.effDischargingStorageGas[i] * m.storageGasDischarge[i,t_final,s]
+            return m.storageGasSoc[i,t,s] == (1 - m.inst.selfDischargeStorageGas[i]) * m.storageGasSoc[i,t_final,s] + charged - discharged
     
-    charged = m.effChargingStorageGas[i] * m.storageGasCharge[i,t-1,s]
-    discharged = 1/m.effDischargingStorageGas[i] * m.storageGasDischarge[i,t-1,s]
-    return m.storageGasSoc[i,t,s] == (1 - m.selfDischargeStorageGas[i]) * m.storageGasSoc[i,t-1,s] + charged - discharged
+    charged = m.inst.effChargingStorageGas[i] * m.storageGasCharge[i,t-1,s]
+    discharged = 1/m.inst.effDischargingStorageGas[i] * m.storageGasDischarge[i,t-1,s]
+    return m.storageGasSoc[i,t,s] == (1 - m.inst.selfDischargeStorageGas[i]) * m.storageGasSoc[i,t-1,s] + charged - discharged
 
 def cons_max_capacity_storage_liquid(m:ModelMOPTA, i:int, t:int, s:int):
-    return m.storageLiquidSoc[i,t,s] <= m.capacityTank[i] * m.buildNumStorageLiquid[i]
+    return m.storageLiquidSoc[i,t,s] <= m.inst.capacityTank[i] * m.buildNumStorageLiquid[i]
 
 def cons_max_capacity_storage_gas(m:ModelMOPTA, i:int, t:int, s:int):
-    return m.storageGasSoc[i,t,s] <= m.capacityElectrolyzer[i] * m.buildNumStorageGas[i]
+    return m.storageGasSoc[i,t,s] <= m.inst.capacityElectrolyzer[i] * m.buildNumStorageGas[i]
 
 def cons_max_gas_charge_bound(m:ModelMOPTA, i:int, t:int, s:int):
-    return m.storageGasCharge[i,t,s] <= m.maxChargeElectrolyzer[i] * m.buildNumStorageGas[i]
+    return m.storageGasCharge[i,t,s] <= m.inst.maxChargeElectrolyzer[i] * m.buildNumStorageGas[i]
 
 def cons_max_gas_discharge_bound(m:ModelMOPTA, i:int, t:int, s:int):
-    return m.storageGasDischarge[i,t,s] <= m.maxChargeElectrolyzer[i] * m.buildNumStorageGas[i]
+    return m.storageGasDischarge[i,t,s] <= m.inst.maxChargeElectrolyzer[i] * m.buildNumStorageGas[i]
 
 def cons_max_liquid_charge_bound(m:ModelMOPTA, i:int, t:int, s:int):
-    return m.storageLiquidCharge[i,t,s] <= m.maxChargeTank[i] * m.buildNumStorageLiquid[i]
+    return m.storageLiquidCharge[i,t,s] <= m.inst.maxChargeTank[i] * m.buildNumStorageLiquid[i]
 
 def cons_max_liquid_discharge_bound(m:ModelMOPTA, i:int, t:int, s:int):
-    return m.storageLiquidDischarge[i,t,s] <= m.maxChargeTank[i] * m.buildNumStorageLiquid[i]
+    return m.storageLiquidDischarge[i,t,s] <= m.inst.maxChargeTank[i] * m.buildNumStorageLiquid[i]
 
 def cons_max_loss_load_electricity(m:ModelMOPTA, s:int):
-    rhs = m.maxLossLoadElectricity * sum(m.demandElectricity[i,t] for i in m.LoadNodes for t in m.TimePeriods)
-    return sum(m.lossLoadElectricity[i,t,s] for i in m.LoadNodes for t in m.TimePeriods) <= rhs
+    rhs = m.inst.maxLossLoadElectricity * sum(m.inst.demandElectricity[i,t] for i in m.inst.LoadNodes for t in m.inst.TimePeriods)
+    return sum(m.lossLoadElectricity[i,t,s] for i in m.inst.LoadNodes for t in m.inst.TimePeriods) <= rhs
 
 def cons_max_loss_load_gas(m:ModelMOPTA, s:int):
-    rhs = m.maxLossLoadGas * sum(m.demandGas[i,t] for i in m.IndustrialNodes for t in m.TimePeriods)
-    return sum(m.lossLoadGas[i,t,s] for i in m.IndustrialNodes for t in m.TimePeriods) <= rhs
+    rhs = m.inst.maxLossLoadGas * sum(m.inst.demandGas[i,t] for i in m.inst.IndustrialNodes for t in m.inst.TimePeriods)
+    return sum(m.lossLoadGas[i,t,s] for i in m.inst.IndustrialNodes for t in m.inst.TimePeriods) <= rhs
 
 def cons_max_flow_electricity(m:ModelMOPTA, i:int, j:int, t:int, s:int):
-    return m.flowElectricity[i,j,t,s] <= m.capacityEdgeElectricity[i,j]
+    if (i,j) in m.inst.capacityEdgeElectricity.index:
+        return m.flowElectricity[i,j,t,s] <= m.inst.capacityEdgeElectricity[i,j]
+    else:
+        return m.flowElectricity[i,j,t,s] <= 0
 
 def cons_max_flow_gas(m:ModelMOPTA, i:int, j:int, t:int, s:int):
-    return m.flowGas[i,j,t,s] <= m.capacityEdgeGas[i,j]
+    if (i,j) in m.inst.capacityEdgeGas.index:
+        return m.flowGas[i,j,t,s] <= m.inst.capacityEdgeGas[i,j]
+    else:
+        return m.flowGas[i,j,t,s] <= 0
 
 def cons_max_flow_liquid(m:ModelMOPTA, i:int, j:int, t:int, s:int):
-    return m.flowLiquid[i,j,t,s] <= m.capacityEdgeLiquid[i,j]
+    if (i,j) in m.inst.capacityEdgeLiquid.index:
+        return m.flowLiquid[i,j,t,s] <= m.inst.capacityEdgeLiquid[i,j]
+    else:
+        return m.flowLiquid[i,j,t,s] <= 0
 
 def obj_cost(m:ModelMOPTA):
     # Investement Costs
-    cost_build_solar = sum(m.costBuildSolar[i]*m.buildNumSolar[i] for i in m.SolarNodes)
-    cost_build_wind  = sum(m.costBuildWind[i]*m.buildNumWind[i] for i in m.WindNodes)
+    cost_build_solar = sum(m.inst.costBuildSolar[i]*m.buildNumSolar[i] for i in m.inst.SolarNodes)
+    cost_build_wind  = sum(m.inst.costBuildWind[i]*m.buildNumWind[i] for i in m.inst.WindNodes)
 
-    cost_build_storage_gas = sum(m.costBuildStorageGas[i]*m.buildNumStorageGas[i] for i in m.ElectrolyzerNodes)
-    cost_build_storage_liquid = sum(m.costBuildStorageLiquid[i]*m.buildNumStorageLiquid[i] for i in m.TankNodes)
+    cost_build_storage_gas = sum(m.inst.costBuildStorageGas[i]*m.buildNumStorageGas[i] for i in m.inst.ElectrolyzerNodes)
+    cost_build_storage_liquid = sum(m.inst.costBuildStorageLiquid[i]*m.buildNumStorageLiquid[i] for i in m.inst.TankNodes)
 
     # Operational Costs
-    cost_storage_gas = sum(m.scenarioWeight[s] * (sum(m.costStorageGas*m.storageGasSoc[i,t,s] for i in m.ElectrolyzerNodes for t in m.TimePeriods)) for s in m.Scenarios)
-    cost_storage_liquid = sum(m.scenarioWeight[s] * (sum(m.costStorageLiquid*m.storageLiquidSoc[i,t,s] for i in m.TankNodes for t in m.TimePeriods)) for s in m.Scenarios)
+    cost_storage_gas = sum(m.inst.scenarioWeight[s] * (sum(m.inst.costStorageGas*m.storageGasSoc[i,t,s] for i in m.inst.ElectrolyzerNodes for t in m.inst.TimePeriods)) for s in m.inst.Scenarios)
+    cost_storage_liquid = sum(m.inst.scenarioWeight[s] * (sum(m.inst.costStorageLiquid*m.storageLiquidSoc[i,t,s] for i in m.inst.TankNodes for t in m.inst.TimePeriods)) for s in m.inst.Scenarios)
     
     return cost_build_solar + cost_build_wind + cost_build_storage_gas + cost_build_storage_liquid + cost_storage_gas + cost_storage_liquid
 
