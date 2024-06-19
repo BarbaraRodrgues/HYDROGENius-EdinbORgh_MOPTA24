@@ -1,5 +1,5 @@
 # User-defined Libraries
-from auxiliary import InstanceMOPTA, ModelMOPTA, fix_integer_variables, run_solve, run_optimality_check
+from auxiliary import InstanceMOPTA, ModelMOPTA, run_optimality_check
 # Python Libraries
 import os
 import streamlit as st
@@ -35,22 +35,25 @@ def update_instance_data():
 def run_model():
     # Run model and stora solution
     inst_data = st.session_state.get('inst_data')
-    model = ModelMOPTA().build_inst(st.session_state.inst_data)
-    opt = pyo.SolverFactory("gurobi_direct")
-    results = opt.solve(model)
-    inst_data.load_solution(results, model)
+    model = ModelMOPTA(inst_data)
+
+    model.optimize()
+    run_optimality_check(model)
+    # Load solution to inst_data
+    model.load_solution_inst()
+    inst_data = model.inst 
     
     # Fix integer variables to compute duals
-    LPmodel = fix_integer_variables(model) 
+    LPmodel = model.fixed()
     # Re-run model
-    LPmodel.dual = pyoenv.Suffix(direction=pyoenv.Suffix.IMPORT_EXPORT) #Needed to export dual values later
-    results2 = run_solve(LPmodel, warmstart=True)
-    LPmodel = run_optimality_check(results2, LPmodel)
+    LPmodel.optimize()
+    run_optimality_check(LPmodel)
+
     # Export duals to instance
-    inst_data.duals_E = pd.DataFrame.from_dict({s: LPmodel.dual[LPmodel.CmaxLossLoadElectricity[s]] 
-                                                for s in LPmodel.Scenarios}, orient='index')
-    inst_data.duals_G = pd.DataFrame.from_dict({s: LPmodel.dual[LPmodel.CmaxLossLoadGas[s]] 
-                                                for s in LPmodel.Scenarios}, orient='index')
+    inst_data.duals_E = pd.DataFrame.from_dict({s: LPmodel.getConstrByName(f"CmaxLossLoadElectricity[{s}]").Pi
+                                                for s in model.inst.Scenarios}, orient='index')
+    inst_data.duals_G = pd.DataFrame.from_dict({s: LPmodel.getConstrByName(f"CmaxLossLoadGas[{s}]").Pi
+                                                for s in model.inst.Scenarios}, orient='index')
     
     st.session_state.inst_data = inst_data
     

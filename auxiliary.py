@@ -215,63 +215,10 @@ class InstanceMOPTA():
         self.costStorageGas           = df_temp['operational_cost_gas_storage'].iloc[0]
         self.costStorageLiquid        = df_temp['operational_cost_liquid_storage'].iloc[0]
         
-    def load_solution(self, results:SolverResults, model:pyo.ConcreteModel):
-        assert (results.solver.status != SolverStatus.unknown), f'Solutions do not exist, the model must be solved before.'
-        
-        # Update solution loaded and optimality status parameters
-        self.is_solution_loaded = True
-        if (results.solver.termination_condition == TerminationCondition.optimal):
-            self.optimality_status = 'Optimal'
-        elif (results.solver.termination_condition == TerminationCondition.infeasible):
-            self.optimality_status = 'Infeasible'
-        elif (results.solver.termination_condition == TerminationCondition.unbounded):
-            self.optimality_status = 'Unbounded'
-        else:
-            self.optimality_status = f'Pyomo Termination Code {results.solver.status}'
-        
-        self.buildNumSolar = pd.DataFrame.from_dict(model.buildNumSolar.extract_values(), orient='index', columns=['buildNumSolar'])
-        self.buildNumSolar.index.name = 'Solar Plant'
-        self.buildNumWind = pd.DataFrame.from_dict(model.buildNumWind.extract_values(), orient='index', columns=['buildNumWind'])
-        self.buildNumWind.index.name = 'Wind Plant'
-        self.buildNumStorageGas = pd.DataFrame.from_dict(model.buildNumStorageGas.extract_values(), orient='index', columns=['buildNumStorageGas'])
-        self.buildNumStorageGas.index.name = 'Electrolyzer'
-        self.buildNumStorageLiquid = pd.DataFrame.from_dict(model.buildNumStorageLiquid.extract_values(), orient='index', columns=['buildNumStorageLiquid'])
-        self.buildNumStorageLiquid.index.name = 'Hydrogen Tank'
-
-        self.flowElectricity = pd.DataFrame.from_dict(model.flowElectricity.extract_values(), orient='index', columns=['flowElectricity'])
-        self.flowElectricity.index = pd.MultiIndex.from_tuples(self.flowElectricity.index, names=('Node', 'Node', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.flowGas = pd.DataFrame.from_dict(model.flowGas.extract_values(), orient='index', columns=['flowGas'])
-        self.flowGas.index = pd.MultiIndex.from_tuples(self.flowGas.index, names=('Node', 'Node', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.flowLiquid = pd.DataFrame.from_dict(model.flowLiquid.extract_values(), orient='index', columns=['flowLiquid'])
-        self.flowLiquid.index = pd.MultiIndex.from_tuples(self.flowLiquid.index, names=('Node', 'Node', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.lossLoadElectricity = pd.DataFrame.from_dict(model.lossLoadElectricity.extract_values(), orient='index', columns=['lossLoadElectricity'])
-        self.lossLoadElectricity.index = pd.MultiIndex.from_tuples(self.lossLoadElectricity.index, names=('Load Area', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.lossLoadGas = pd.DataFrame.from_dict(model.lossLoadGas.extract_values(), orient='index', columns=['lossLoadGas'])
-        self.lossLoadGas.index = pd.MultiIndex.from_tuples(self.lossLoadGas.index, names=('Industrial Area', 'Time Period', 'Scenario')) # Set MultiIndex 
-
-        self.generationRenewable = pd.DataFrame.from_dict(model.generationRenewable.extract_values(), orient='index', columns=['generationRenewable'])
-        self.generationRenewable.index = pd.MultiIndex.from_tuples(self.generationRenewable.index, names=('Renewable Plant', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.spillRenewable = pd.DataFrame.from_dict(model.spillRenewable.extract_values(), orient='index', columns=['spillRenewable'])
-        self.spillRenewable.index = pd.MultiIndex.from_tuples(self.spillRenewable.index, names=('Renewable Plant', 'Time Period', 'Scenario')) # Set MultiIndex 
-        
-        self.storageGasSoc = pd.DataFrame.from_dict(model.storageGasSoc.extract_values(), orient='index', columns=['storageGasSoc'])
-        self.storageGasSoc.index = pd.MultiIndex.from_tuples(self.storageGasSoc.index, names=('Electrolyzer', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.storageGasCharge = pd.DataFrame.from_dict(model.storageGasCharge.extract_values(), orient='index', columns=['storageGasCharge'])
-        self.storageGasCharge.index = pd.MultiIndex.from_tuples(self.storageGasCharge.index, names=('Electrolyzer', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.storageGasDischarge = pd.DataFrame.from_dict(model.storageGasDischarge.extract_values(), orient='index', columns=['storageGasDischarge'])
-        self.storageGasDischarge.index = pd.MultiIndex.from_tuples(self.storageGasDischarge.index, names=('Electrolyzer', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.storageLiquidSoc = pd.DataFrame.from_dict(model.storageLiquidSoc.extract_values(), orient='index', columns=['storageLiquidSoc'])
-        self.storageLiquidSoc.index = pd.MultiIndex.from_tuples(self.storageLiquidSoc.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.storageLiquidCharge = pd.DataFrame.from_dict(model.storageLiquidCharge.extract_values(), orient='index', columns=['storageLiquidCharge'])
-        self.storageLiquidCharge.index = pd.MultiIndex.from_tuples(self.storageLiquidCharge.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
-        self.storageLiquidDischarge = pd.DataFrame.from_dict(model.storageLiquidDischarge.extract_values(), orient='index', columns=['storageLiquidDischarge'])
-        self.storageLiquidDischarge.index = pd.MultiIndex.from_tuples(self.storageLiquidDischarge.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
-
 class ModelMOPTA(gp.Model):    
     def __init__(self, instance:InstanceMOPTA, **kwds):
         super().__init__(**kwds)
         self.__inst = instance
-        #self.__build_parameters()
         self.__build_variables()
         self.__build_constraints()
         self.__build_objective()
@@ -332,71 +279,6 @@ class ModelMOPTA(gp.Model):
     @property
     def storageLiquidDischarge(self):
         return self.__storageLiquidDischarge
-
-    def __build_parameters(self):
-        # Sets-------------------------------------------------------------------------
-        self.Days        = pyo.Set(within=pyo.PositiveIntegers)        
-        self.TimePeriods = pyo.Set(within=pyo.PositiveIntegers)
-        self.Nodes       = pyo.Set(within=pyo.PositiveIntegers)
-        self.Scenarios   = pyo.Set(within=pyo.PositiveIntegers)
-
-        self.SolarNodes        = pyo.Set(within=self.Nodes)
-        self.WindNodes         = pyo.Set()
-        self.RenewableNodes    = self.SolarNodes | self.WindNodes # union
-        self.LoadNodes         = pyo.Set()
-        self.IndustrialNodes   = pyo.Set()
-        self.ElectrolyzerNodes = pyo.Set()
-        self.FuelCellNodes     = pyo.Set()
-        self.TankNodes         = pyo.Set()
-        
-        self.startPeriodOfDay = pyo.Param(self.Days, within=self.TimePeriods)
-        self.endPeriodOfDay   = pyo.Param(self.Days, within=self.TimePeriods)
-        
-        # Objective parameters
-        self.costBuildSolar         = pyo.Param(self.SolarNodes, within=pyo.NonNegativeReals)
-        self.costBuildWind          = pyo.Param(self.WindNodes, within=pyo.NonNegativeReals)
-        self.costBuildStorageGas    = pyo.Param(self.ElectrolyzerNodes, within=pyo.NonNegativeReals)
-        self.costBuildStorageLiquid = pyo.Param(self.TankNodes, within=pyo.NonNegativeReals)
-        self.costStorageGas         = pyo.Param(within=pyo.NonNegativeReals)
-        self.costStorageLiquid      = pyo.Param(within=pyo.NonNegativeReals)
-        self.scenarioWeight         = pyo.Param(self.Scenarios, within=pyo.PercentFraction)
-
-        # Bound Parameters
-        self.capacitySolar         = pyo.Param(self.SolarNodes, within=pyo.NonNegativeReals)
-        self.capacityWind          = pyo.Param(self.WindNodes, within=pyo.NonNegativeReals)
-        self.capacityTank          = pyo.Param(self.TankNodes, within=pyo.NonNegativeReals)
-        self.capacityElectrolyzer  = pyo.Param(self.ElectrolyzerNodes, within=pyo.NonNegativeReals)
-        self.maxChargeElectrolyzer = pyo.Param(self.ElectrolyzerNodes, within=pyo.NonNegativeReals)
-        self.maxChargeTank         = pyo.Param(self.TankNodes, within=pyo.NonNegativeReals)
-        self.capacityEdgeElectricity = pyo.Param(self.Nodes, self.Nodes, within=pyo.NonNegativeReals, default=0)
-        self.capacityEdgeGas         = pyo.Param(self.Nodes, self.Nodes, within=pyo.NonNegativeReals, default=0)
-        self.capacityEdgeLiquid      = pyo.Param(self.Nodes, self.Nodes, within=pyo.NonNegativeReals, default=0)
-
-        self.maxLossLoadElectricity = pyo.Param(within=pyo.PercentFraction, mutable=True)
-        self.maxLossLoadGas         = pyo.Param(within=pyo.PercentFraction, mutable=True)
-
-        # Demand Parameters
-        self.demandElectricity = pyo.Param(self.LoadNodes, self.TimePeriods, within=pyo.NonNegativeReals)
-        self.demandGas         = pyo.Param(self.IndustrialNodes, self.TimePeriods, within=pyo.NonNegativeReals)
-
-        # Generation Parameters
-        self.generationSolar = pyo.Param(self.SolarNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        self.generationWind  = pyo.Param(self.WindNodes, self.TimePeriods, self.Scenarios, within=pyo.NonNegativeReals)
-        
-        # Conversion Factor and Efficiency Parameters
-        self.conversionElectricityGas = pyo.Param(within=pyo.NonNegativeReals)
-        self.conversionGasLiquid      = pyo.Param(within=pyo.NonNegativeReals)
-        self.efficiencyElectrolysis   = pyo.Param(within=pyo.PercentFraction)
-        self.efficiencyLiquefaction   = pyo.Param(within=pyo.PercentFraction)
-        self.efficiencyGasification   = pyo.Param(within=pyo.PercentFraction)
-        
-        # Battery Parameters
-        self.selfDischargeStorageGas  = pyo.Param(self.ElectrolyzerNodes, within=pyo.PercentFraction)
-        self.effChargingStorageGas    = pyo.Param(self.ElectrolyzerNodes, within=pyo.PercentFraction)
-        self.effDischargingStorageGas = pyo.Param(self.ElectrolyzerNodes, within=pyo.PercentFraction)
-        self.selfDischargeStorageLiquid  = pyo.Param(self.TankNodes, within=pyo.PercentFraction)
-        self.effChargingStorageLiquid    = pyo.Param(self.TankNodes, within=pyo.PercentFraction)
-        self.effDischargingStorageLiquid = pyo.Param(self.TankNodes, within=pyo.PercentFraction)
 
     def __build_variables(self):
         # First Stage Decisions      
@@ -464,81 +346,60 @@ class ModelMOPTA(gp.Model):
         self.addConstrs((cons_max_flow_liquid(self, i, j, t, s) for i in self.inst.Nodes for j in self.inst.Nodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CmaxFlowLiquid")
 
     def __build_objective(self):
-        self.setObjective(obj_cost, GRB.MINIMIZE)
+        self.setObjective(obj_cost(self), GRB.MINIMIZE)
 
-    def build_inst(self, inst:InstanceMOPTA):
-        # Create a dictionary of data in pyomo's format    
-        dict_data = dict({})
+    def load_solution_inst(self):
+        # Update solution loaded and optimality status parameters
+        if (self.Status == GRB.OPTIMAL):
+            self.inst.optimality_status = 'Optimal'
+        elif (self.Status == GRB.INFEASIBLE):
+            self.inst.optimality_status = 'Infeasible'
+        elif (self.Status == GRB.UNBOUNDED):
+            self.inst.optimality_status = 'Unbounded'
+        else:
+            self.inst.optimality_status = f'Termination Status {self.Status}'
         
-        ## Sets & Indexes
-        dict_data['Days']        = {None: list(inst.Days)}
-        dict_data['TimePeriods'] = {None: list(inst.TimePeriods)}
-        dict_data['Nodes']       = {None: list(inst.Nodes)}
-        dict_data['Scenarios']   = {None: list(inst.Scenarios)}
+        assert (hasattr(self.buildNumSolar[list(self.inst.SolarNodes)[0]], 'X')), f'Solutions do not exist, the model must be solved to optimality before.'
+        self.inst.is_solution_loaded = True
 
-        dict_data['SolarNodes']        = {None: list(inst.SolarNodes)}
-        dict_data['WindNodes']         = {None: list(inst.WindNodes)}
-        dict_data['LoadNodes']         = {None: list(inst.LoadNodes)}
-        dict_data['IndustrialNodes']   = {None: list(inst.IndustrialNodes)}
-        dict_data['ElectrolyzerNodes'] = {None: list(inst.ElectrolyzerNodes)}
-        dict_data['FuelCellNodes']     = {None: list(inst.FuelCellNodes)}
-        dict_data['TankNodes']         = {None: list(inst.TankNodes)}
+        self.inst.buildNumSolar = pd.DataFrame.from_dict({index: var.X for index, var in self.buildNumSolar.items()}, orient='index', columns=['buildNumSolar'])
+        self.inst.buildNumSolar.index.name = 'Solar Plant'
+        self.inst.buildNumWind = pd.DataFrame.from_dict({index: var.X for index, var in self.buildNumWind.items()}, orient='index', columns=['buildNumWind'])
+        self.inst.buildNumWind.index.name = 'Wind Plant'
+        self.inst.buildNumStorageGas = pd.DataFrame.from_dict({index: var.X for index, var in self.buildNumStorageGas.items()}, orient='index', columns=['buildNumStorageGas'])
+        self.inst.buildNumStorageGas.index.name = 'Electrolyzer'
+        self.inst.buildNumStorageLiquid = pd.DataFrame.from_dict({index: var.X for index, var in self.buildNumStorageLiquid.items()}, orient='index', columns=['buildNumStorageLiquid'])
+        self.inst.buildNumStorageLiquid.index.name = 'Hydrogen Tank'
 
-        dict_data['startPeriodOfDay'] = inst.startPeriodOfDay.to_dict()
-        dict_data['endPeriodOfDay']   = inst.endPeriodOfDay.to_dict()
+        self.inst.flowElectricity = pd.DataFrame.from_dict({index: var.X for index, var in self.flowElectricity.items()}, orient='index', columns=['flowElectricity'])
+        self.inst.flowElectricity.index = pd.MultiIndex.from_tuples(self.inst.flowElectricity.index, names=('Node', 'Node', 'Time Period', 'Scenario')) # Set MultiIndex
+        self.inst.flowGas = pd.DataFrame.from_dict({index: var.X for index, var in self.flowGas.items()}, orient='index', columns=['flowGas'])
+        self.inst.flowGas.index = pd.MultiIndex.from_tuples(self.inst.flowGas.index, names=('Node', 'Node', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.flowLiquid = pd.DataFrame.from_dict({index: var.X for index, var in self.flowLiquid.items()}, orient='index', columns=['flowLiquid'])
+        self.inst.flowLiquid.index = pd.MultiIndex.from_tuples(self.inst.flowLiquid.index, names=('Node', 'Node', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.lossLoadElectricity = pd.DataFrame.from_dict({index: var.X for index, var in self.lossLoadElectricity.items()}, orient='index', columns=['lossLoadElectricity'])
+        self.inst.lossLoadElectricity.index = pd.MultiIndex.from_tuples(self.inst.lossLoadElectricity.index, names=('Load Area', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.lossLoadGas = pd.DataFrame.from_dict({index: var.X for index, var in self.lossLoadGas.items()}, orient='index', columns=['lossLoadGas'])
+        self.inst.lossLoadGas.index = pd.MultiIndex.from_tuples(self.inst.lossLoadGas.index, names=('Industrial Area', 'Time Period', 'Scenario')) # Set MultiIndex 
+
+        self.inst.generationRenewable = pd.DataFrame.from_dict({index: var.X for index, var in self.generationRenewable.items()}, orient='index', columns=['generationRenewable'])
+        self.inst.generationRenewable.index = pd.MultiIndex.from_tuples(self.inst.generationRenewable.index, names=('Renewable Plant', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.spillRenewable = pd.DataFrame.from_dict({index: var.X for index, var in self.spillRenewable.items()}, orient='index', columns=['spillRenewable'])
+        self.inst.spillRenewable.index = pd.MultiIndex.from_tuples(self.inst.spillRenewable.index, names=('Renewable Plant', 'Time Period', 'Scenario')) # Set MultiIndex 
         
-        ## Objective parameters
-        dict_data['costBuildSolar']         = inst.costBuildSolar.to_dict()
-        dict_data['costBuildWind']          = inst.costBuildWind.to_dict()
-        dict_data['costBuildStorageGas']    = inst.costBuildStorageGas.to_dict()
-        dict_data['costBuildStorageLiquid'] = inst.costBuildStorageLiquid.to_dict()
-        dict_data['costStorageGas']         = {None: inst.costStorageGas}
-        dict_data['costStorageLiquid']      = {None: inst.costStorageLiquid}
-        dict_data['scenarioWeight']         = inst.scenarioWeight.to_dict()
+        self.inst.storageGasSoc = pd.DataFrame.from_dict({index: var.X for index, var in self.storageGasSoc.items()}, orient='index', columns=['storageGasSoc'])
+        self.inst.storageGasSoc.index = pd.MultiIndex.from_tuples(self.inst.storageGasSoc.index, names=('Electrolyzer', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.storageGasCharge = pd.DataFrame.from_dict({index: var.X for index, var in self.storageGasCharge.items()}, orient='index', columns=['storageGasCharge'])
+        self.inst.storageGasCharge.index = pd.MultiIndex.from_tuples(self.inst.storageGasCharge.index, names=('Electrolyzer', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.storageGasDischarge = pd.DataFrame.from_dict({index: var.X for index, var in self.storageGasDischarge.items()}, orient='index', columns=['storageGasDischarge'])
+        self.inst.storageGasDischarge.index = pd.MultiIndex.from_tuples(self.inst.storageGasDischarge.index, names=('Electrolyzer', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.storageLiquidSoc = pd.DataFrame.from_dict({index: var.X for index, var in self.storageLiquidSoc.items()}, orient='index', columns=['storageLiquidSoc'])
+        self.inst.storageLiquidSoc.index = pd.MultiIndex.from_tuples(self.inst.storageLiquidSoc.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.storageLiquidCharge = pd.DataFrame.from_dict({index: var.X for index, var in self.storageLiquidCharge.items()}, orient='index', columns=['storageLiquidCharge'])
+        self.inst.storageLiquidCharge.index = pd.MultiIndex.from_tuples(self.inst.storageLiquidCharge.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
+        self.inst.storageLiquidDischarge = pd.DataFrame.from_dict({index: var.X for index, var in self.storageLiquidDischarge.items()}, orient='index', columns=['storageLiquidDischarge'])
+        self.inst.storageLiquidDischarge.index = pd.MultiIndex.from_tuples(self.inst.storageLiquidDischarge.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
 
-        ## Bound Parameters
-        dict_data['capacitySolar']  = inst.capacitySolar.to_dict()
-        dict_data['capacityWind']   = inst.capacityWind.to_dict()
-        dict_data['capacityTank']          = inst.capacityTank.to_dict()
-        dict_data['capacityElectrolyzer']  = inst.capacityElectrolyzer.to_dict()
-        dict_data['maxChargeElectrolyzer'] = inst.maxChargeElectrolyzer.to_dict()
-        dict_data['maxChargeTank']         = inst.maxChargeTank.to_dict()
-        dict_data['capacityEdgeElectricity'] = inst.capacityEdgeElectricity.to_dict()
-        dict_data['capacityEdgeGas']         = inst.capacityEdgeGas.to_dict()
-        dict_data['capacityEdgeLiquid']      = inst.capacityEdgeLiquid.to_dict()
-
-        dict_data['maxLossLoadElectricity'] = {None: inst.maxLossLoadElectricity}
-        dict_data['maxLossLoadGas']         = {None: inst.maxLossLoadGas}
-
-        ## Demand Parameters
-        dict_data['demandElectricity'] = inst.demandElectricity.to_dict()
-        dict_data['demandGas']         = inst.demandGas.to_dict()
-        
-        ## Generation Parameters
-        dict_data['generationSolar'] = inst.generationSolar.to_dict()
-        dict_data['generationWind']  = inst.generationWind.to_dict()
-        
-        ## Conversion Factor and Efficiency Parameters
-        dict_data['conversionElectricityGas'] = {None: inst.conversionElectricityGas}
-        dict_data['conversionGasLiquid']      = {None: inst.conversionGasLiquid}
-        dict_data['efficiencyElectrolysis']   = {None: inst.efficiencyElectrolysis}
-        dict_data['efficiencyLiquefaction']   = {None: inst.efficiencyLiquefaction}
-        dict_data['efficiencyGasification']   = {None: inst.efficiencyGasification}
-
-        ## Battery Parameters
-        dict_data['selfDischargeStorageGas']  = inst.selfDischargeStorageGas.to_dict()
-        dict_data['effChargingStorageGas']    = inst.effChargingStorageGas.to_dict()
-        dict_data['effDischargingStorageGas'] = inst.effDischargingStorageGas.to_dict()
-
-        dict_data['selfDischargeStorageLiquid']  = inst.selfDischargeStorageLiquid.to_dict()
-        dict_data['effChargingStorageLiquid']    = inst.effChargingStorageLiquid.to_dict()
-        dict_data['effDischargingStorageLiquid'] = inst.effDischargingStorageLiquid.to_dict()
-
-        # Create Data Instance
-        data = {None: dict_data}
-        instance = self.create_instance(data)
-        
-        return instance
 
 #------------------------------------------------------------------------------
 # Auxiliary Functions to Define Constraints
@@ -674,66 +535,14 @@ def obj_cost(m:ModelMOPTA):
 # Auxiliary Functions to Deal with Solutions
 #------------------------------------------------------------------------------
 
-def fix_integer_variables(model:pyo.ConcreteModel):
-    '''
-    NOTE: Model object must have a solution loaded
-    '''
-    # Get solution values of integer variables
-    buildNumSolar_val = model.buildNumSolar.extract_values()
-    buildNumWind_val  = model.buildNumWind.extract_values()
-    buildNumStorageGas_val    = model.buildNumStorageGas.extract_values()
-    buildNumStorageLiquid_val = model.buildNumStorageLiquid.extract_values()
-
-    # Relax integrality on variables
-    model.buildNumSolar.domain = pyo.NonNegativeReals
-    model.buildNumWind.domain  = pyo.NonNegativeReals
-    model.buildNumStorageGas.domain    = pyo.NonNegativeReals
-    model.buildNumStorageLiquid.domain = pyo.NonNegativeReals
-
-    # Fix variable value
-    for i in model.SolarNodes:
-        model.buildNumSolar[i].fix(buildNumSolar_val[i])
-    for i in model.WindNodes:
-        model.buildNumWind[i].fix(buildNumWind_val[i])
-    for i in model.ElectrolyzerNodes:
-        model.buildNumStorageGas[i].fix(buildNumStorageGas_val[i])
-    for i in model.TankNodes:
-        model.buildNumStorageLiquid[i].fix(buildNumStorageLiquid_val[i])
-
-    return model
-
-def run_solve(model:pyo.ConcreteModel, solver_name:str="gurobi_direct", warmstart:bool=False):
-    opt = pyo.SolverFactory(solver_name) # Select solver
-    results = opt.solve(model, load_solutions=False, warmstart=warmstart) # Solve model
-
-    return results
-
-def run_optimality_check(results, model:pyo.ConcreteModel):
-    if results.solver.termination_condition == TerminationCondition.optimal:
+def run_optimality_check(model:ModelMOPTA):
+    if model.Status == GRB.OPTIMAL:
         print("Model is optimal")
-        model.solutions.load_from(results)
+        print(f"Optimal objective: {model.ObjVal:g}")
     else:
-        print(f"Termination Status: {results.solver.termination_condition} \n Termination message: {results.solver.termination_message} \n Results {results}")
-    
-    return model
+        print(f"Optimization ended with status {model.Status}")
 
-def store_solution(instance:pyo.ConcreteModel, filename:str):
-    '''
-    Documentation: Store variables in `instance` to a file named `file_name`
-    '''
-    # Open the Pandas Excel writer
-    writer = pd.ExcelWriter(filename, engine='xlsxwriter')
-
-    # Iterate over variables in the model
-    for var in instance.component_objects(pyo.Var, active=True): 
-        # Store solutions to a dataframe 
-        df = pd.DataFrame.from_dict(var.extract_values(), orient='index', columns=[str(var)])
-        # Upload solutions to excel sheet with correspoding name
-        df.to_excel(writer, sheet_name=str(var), index=True)
-
-    # Close the Pandas Excel writer and output the Excel file.
-    writer.save()
-
+# TODO fix run_economical_analysis() to take gp model 
 def run_economical_analysis(model:pyo.ConcreteModel, ll_perc_lb:float, ll_perc_ub:float, ll_perc_step:float):
     assert ((ll_perc_lb>=0) & (ll_perc_lb <=1)), f"The parameter 'll_perc_lb'={ll_perc_lb} must be a percentage."
     assert ((ll_perc_ub>=0) & (ll_perc_ub <=1)), f"The parameter 'll_perc_ub'={ll_perc_ub} must be a percentage."
