@@ -282,31 +282,31 @@ class ModelMOPTA(gp.Model):
 
     def __build_variables(self):
         # First Stage Decisions      
-        self.__buildNumSolar = self.addVars(self.inst.SolarNodes, vtype=GRB.INTEGER)
-        self.__buildNumWind  = self.addVars(self.inst.WindNodes, vtype=GRB.INTEGER)
-        self.__buildNumStorageGas    = self.addVars(self.inst.ElectrolyzerNodes, vtype=GRB.INTEGER)
-        self.__buildNumStorageLiquid = self.addVars(self.inst.TankNodes, vtype=GRB.INTEGER)
+        self.__buildNumSolar = self.addVars(self.inst.SolarNodes, vtype=GRB.INTEGER, name="buildNumSolar")
+        self.__buildNumWind  = self.addVars(self.inst.WindNodes, vtype=GRB.INTEGER, name="buildNumWind")
+        self.__buildNumStorageGas    = self.addVars(self.inst.ElectrolyzerNodes, vtype=GRB.INTEGER, name="buildNumStorageGas")
+        self.__buildNumStorageLiquid = self.addVars(self.inst.TankNodes, vtype=GRB.INTEGER, name="buildNumStorageLiquid")
         
         # Flow Decisions
-        self.__flowElectricity = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__flowGas         = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__flowLiquid      = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__flowElectricity = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="flowElectricity")
+        self.__flowGas         = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="flowGas")
+        self.__flowLiquid      = self.addVars(self.inst.Nodes, self.inst.Nodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="flowLiquid")
 
-        self.__lossLoadElectricity = self.addVars(self.inst.LoadNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__lossLoadGas         = self.addVars(self.inst.IndustrialNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__lossLoadElectricity = self.addVars(self.inst.LoadNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="lossLoadElectricity")
+        self.__lossLoadGas         = self.addVars(self.inst.IndustrialNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="lossLoadGas")
 
         # Generation Decision
-        self.__generationRenewable = self.addVars(self.inst.RenewableNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__spillRenewable      = self.addVars(self.inst.RenewableNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__generationRenewable = self.addVars(self.inst.RenewableNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="generationRenewable")
+        self.__spillRenewable      = self.addVars(self.inst.RenewableNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="spillRenewable")
 
         # Storage Decisions
-        self.__storageGasSoc       = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__storageGasCharge    = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__storageGasDischarge = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__storageGasSoc       = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="storageGasSoc")
+        self.__storageGasCharge    = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="storageGasCharge")
+        self.__storageGasDischarge = self.addVars(self.inst.ElectrolyzerNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="storageGasDischarge")
 
-        self.__storageLiquidSoc       = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__storageLiquidCharge    = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
-        self.__storageLiquidDischarge = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS)
+        self.__storageLiquidSoc       = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="storageLiquidSoc")
+        self.__storageLiquidCharge    = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="storageLiquidCharge")
+        self.__storageLiquidDischarge = self.addVars(self.inst.TankNodes, self.inst.TimePeriods, self.inst.Scenarios, vtype=GRB.CONTINUOUS, name="storageLiquidDischarge")
 
     def __build_constraints(self):
         # First Stage Constraints
@@ -400,6 +400,21 @@ class ModelMOPTA(gp.Model):
         self.inst.storageLiquidDischarge = pd.DataFrame.from_dict({index: var.X for index, var in self.storageLiquidDischarge.items()}, orient='index', columns=['storageLiquidDischarge'])
         self.inst.storageLiquidDischarge.index = pd.MultiIndex.from_tuples(self.inst.storageLiquidDischarge.index, names=('Hydrogen Tank', 'Time Period', 'Scenario')) # Set MultiIndex 
 
+    def update_loss_load_params(self, ll_perc_E:float, ll_perc_G:float):
+        # Remove constraints where the loss of load parameters appear
+        for s in self.inst.Scenarios:
+            self.remove(self.getConstrByName(f"CmaxLossLoadElectricity[{s}]"))
+            self.remove(self.getConstrByName(f"CmaxLossLoadGas[{s}]"))
+        self.update()
+
+        # Update the loss of load parameters
+        self.inst.maxLossLoadElectricity = ll_perc_E
+        self.inst.maxLossLoadGas = ll_perc_G
+        
+        # Add the loss of load constraints again
+        self.addConstrs((cons_max_loss_load_electricity(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadElectricity")
+        self.addConstrs((cons_max_loss_load_gas(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadGas")
+        self.update()
 
 #------------------------------------------------------------------------------
 # Auxiliary Functions to Define Constraints
@@ -542,69 +557,62 @@ def run_optimality_check(model:ModelMOPTA):
     else:
         print(f"Optimization ended with status {model.Status}")
 
-# TODO fix run_economical_analysis() to take gp model 
-def run_economical_analysis(model:pyo.ConcreteModel, ll_perc_lb:float, ll_perc_ub:float, ll_perc_step:float):
+def run_economical_analysis(model:ModelMOPTA, ll_perc_lb:float, ll_perc_ub:float, ll_perc_step:float):
     assert ((ll_perc_lb>=0) & (ll_perc_lb <=1)), f"The parameter 'll_perc_lb'={ll_perc_lb} must be a percentage."
     assert ((ll_perc_ub>=0) & (ll_perc_ub <=1)), f"The parameter 'll_perc_ub'={ll_perc_ub} must be a percentage."
     assert ((ll_perc_step>=0) & (ll_perc_step <=1)), f"The parameter 'll_perc_step'={ll_perc_step} must be between 0 and 1."
 
-    ll_perc_E = ll_perc_lb
-    ll_perc_G = ll_perc_lb
     df_results = pd.DataFrame(columns=['ll_perc_E', 'll_perc_G', 'investment_solar','investment_wind',
-                                       'investment_storage_gas','investment_storage_liquid',
-                                       'investment_cost', 'operational_cost']
-                              + [f"operational_cost_{s}" for s in model.Scenarios] 
-                              + [f"ll_dual_E_{s}" for s in model.Scenarios]
-                              + [f"ll_dual_G_{s}" for s in model.Scenarios])
+                                        'investment_storage_gas','investment_storage_liquid',
+                                        'investment_cost', 'operational_cost']
+                                + [f"operational_cost_{s}" for s in model.inst.Scenarios] 
+                                + [f"ll_dual_E_{s}" for s in model.inst.Scenarios]
+                                + [f"ll_dual_G_{s}" for s in model.inst.Scenarios])
     
     for ll_perc_E in np.arange(ll_perc_lb, ll_perc_ub+ll_perc_step, ll_perc_step):
         for ll_perc_G in np.arange(ll_perc_lb, ll_perc_ub+ll_perc_step, ll_perc_step):
             print(f"Elect = {ll_perc_E} | Gas = {ll_perc_G}")
             # Update Maximum Loss Load Parameter
-            model.maxLossLoadElectricity = ll_perc_E
-            model.maxLossLoadGas = ll_perc_G
+            model.update_loss_load_params(ll_perc_E, ll_perc_G)        
 
             # Run MILP Model
-            results = run_solve(model, warmstart=True)
-            model = run_optimality_check(results, model)
+            model.optimize()
+            run_optimality_check(model)
 
             # Get optimal OPERATIONAL Costs
-            cost_build_solar = sum(model.costBuildSolar[i]*pyo.value(model.buildNumSolar[i]) for i in model.SolarNodes)
-            cost_build_wind  = sum(model.costBuildWind[i]*pyo.value(model.buildNumWind[i]) for i in model.WindNodes)
-            cost_build_storage_gas = sum(model.costBuildStorageGas[i]*pyo.value(model.buildNumStorageGas[i]) for i in model.ElectrolyzerNodes)
-            cost_build_storage_liquid = sum(model.costBuildStorageLiquid[i]*pyo.value(model.buildNumStorageLiquid[i]) for i in model.TankNodes)
+            cost_build_solar = sum(model.inst.costBuildSolar[i] * model.buildNumSolar[i].X for i in model.inst.SolarNodes)
+            cost_build_wind  = sum(model.inst.costBuildWind[i] * model.buildNumWind[i].X for i in model.inst.WindNodes)
+            cost_build_storage_gas = sum(model.inst.costBuildStorageGas[i] * model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
+            cost_build_storage_liquid = sum(model.inst.costBuildStorageLiquid[i] * model.buildNumStorageLiquid[i].X for i in model.inst.TankNodes)
             investment_cost = cost_build_solar + cost_build_wind + cost_build_storage_gas + cost_build_storage_liquid
 
             # Fix investement decision, relax integrality and re-solve LP
-            LPmodel = fix_integer_variables(model)
-        
-            # Re-run model
-            if (ll_perc_E == ll_perc_lb) and (ll_perc_G == ll_perc_lb):
-                LPmodel.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT_EXPORT) #Needed to export dual values later
-            results2 = run_solve(LPmodel, warmstart=True)
-            LPmodel = run_optimality_check(results2, LPmodel)
+            LPmodel = model.fixed()
+            LPmodel.optimize() #TODO warmstart=True
+            run_optimality_check(LPmodel) 
             
             # Get optimal OPERATIONAL Costs
-            cost_storage_gas = {s: (sum(LPmodel.costStorageGas * pyo.value(LPmodel.storageGasSoc[i,t,s])\
-                                        for i in LPmodel.ElectrolyzerNodes for t in LPmodel.TimePeriods)) for s in LPmodel.Scenarios}
-            cost_storage_liquid = {s: (sum(LPmodel.costStorageLiquid * pyo.value(LPmodel.storageLiquidSoc[i,t,s])\
-                                        for i in LPmodel.TankNodes for t in LPmodel.TimePeriods)) for s in LPmodel.Scenarios}
-            operarional_costs = {s: cost_storage_gas[s] + cost_storage_liquid[s] for s in LPmodel.Scenarios}
+            cost_storage_gas = {s: (sum(model.inst.costStorageGas * LPmodel.getVarByName(f"storageGasSoc[{i},{t},{s}]").X\
+                                        for i in model.inst.ElectrolyzerNodes for t in model.inst.TimePeriods)) for s in model.inst.Scenarios}
+            cost_storage_liquid = {s: (sum(model.inst.costStorageLiquid * LPmodel.getVarByName(f"storageLiquidSoc[{i},{t},{s}]").X\
+                                        for i in model.inst.TankNodes for t in model.inst.TimePeriods)) for s in model.inst.Scenarios}
+            operarional_costs = {s: cost_storage_gas[s] + cost_storage_liquid[s] for s in model.inst.Scenarios}
 
             # Compute Loss of Load Duals/Prices
-            duals_E = {s: LPmodel.dual[LPmodel.CmaxLossLoadElectricity[s]] for s in LPmodel.Scenarios}
-            duals_G = {s: LPmodel.dual[LPmodel.CmaxLossLoadGas[s]] for s in LPmodel.Scenarios}
-
+            duals_E = {s: LPmodel.getConstrByName(f"CmaxLossLoadElectricity[{s}]").Pi for s in model.inst.Scenarios}
+            duals_G = {s: LPmodel.getConstrByName(f"CmaxLossLoadGas[{s}]").Pi for s in model.inst.Scenarios}
+    
             # Update dataframe of results
             new_row = {'ll_perc_E': ll_perc_E, 
-                       'll_perc_G': ll_perc_G,
-                       'investment_solar': cost_build_solar,
-                       'investment_wind': cost_build_wind,
-                       'investment_storage_gas': cost_build_storage_gas,
-                       'investment_storage_liquid': cost_build_storage_liquid,
-                       'investment_cost': investment_cost,
-                       'operational_cost': sum(operarional_costs[s] for s in LPmodel.Scenarios)}
-            for s in LPmodel.Scenarios:
+                        'll_perc_G': ll_perc_G,
+                        'investment_solar': cost_build_solar,
+                        'investment_wind': cost_build_wind,
+                        'investment_storage_gas': cost_build_storage_gas,
+                        'investment_storage_liquid': cost_build_storage_liquid,
+                        'investment_cost': investment_cost,
+                        'operational_cost': sum(operarional_costs[s] for s in model.inst.Scenarios)}
+        
+            for s in model.inst.Scenarios:
                 new_row[f"operational_cost_{s}"] = operarional_costs[s]
                 new_row[f"ll_dual_E_{s}"] = duals_E[s]
                 new_row[f"ll_dual_G_{s}"] = duals_G[s]
