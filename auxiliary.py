@@ -431,7 +431,27 @@ class ModelMOPTA(gp.Model):
         self.addConstrs((cons_flow_balance_loads(self, i, t, s) for i in self.inst.LoadNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceLoads")
         self.addConstrs((cons_max_loss_load_electricity(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadElectricity")
         self.update()
+    
+    def update_future_scenarios_params(self, wind_cost_perc:float, pv_cost_perc:float, h2_tank_cost_perc:float, h2_intraday_cost_perc:float):
+        # Update the cost parameters
+        self.inst.costBuildWind = self.inst.costBuildWind * (1 + wind_cost_perc)
+        self.inst.costBuildSolar = self.inst.costBuildSolar * (1 + pv_cost_perc)
+        self.inst.costBuildStorageLiquid = self.inst.costBuildStorageLiquid * (1 + h2_tank_cost_perc)
+        self.inst.costBuildStorageGas = self.inst.costBuildStorageGas * (1 + h2_intraday_cost_perc)
 
+        # Reset Objective
+        # Investement Costs
+        cost_build_solar = sum(self.inst.costBuildSolar[i]*self.buildNumSolar[i] for i in self.inst.SolarNodes)
+        cost_build_wind  = sum(self.inst.costBuildWind[i]*self.buildNumWind[i] for i in self.inst.WindNodes)
+
+        cost_build_storage_gas = sum(self.inst.costBuildStorageGas[i]*self.buildNumStorageGas[i] for i in self.inst.ElectrolyzerNodes)
+        cost_build_storage_liquid = sum(self.inst.costBuildStorageLiquid[i]*self.buildNumStorageLiquid[i] for i in self.inst.TankNodes)
+
+        # Operational Costs
+        cost_storage_gas = sum(self.inst.scenarioWeight[s] * (sum(self.inst.costStorageGas*self.storageGasSoc[i,t,s] for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods)) for s in self.inst.Scenarios)
+        cost_storage_liquid = sum(self.inst.scenarioWeight[s] * (sum(self.inst.costStorageLiquid*self.storageLiquidSoc[i,t,s] for i in self.inst.TankNodes for t in self.inst.TimePeriods)) for s in self.inst.Scenarios)
+        
+        self.SetObjective(cost_build_solar + cost_build_wind + cost_build_storage_gas + cost_build_storage_liquid + cost_storage_gas + cost_storage_liquid)
 
 #------------------------------------------------------------------------------
 # Auxiliary Functions to Define Constraints
@@ -690,6 +710,8 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
     assert (all(s >= -1 for s in h2_tank_cost_scenarios) & all(s <= 1 for s in h2_tank_cost_scenarios)), f"The parameters 'h2_tank_cost_scenarios'={h2_tank_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in h2_intraday_cost_scenarios) & all(s <= 1 for s in h2_intraday_cost_scenarios)), f"The parameters 'h2_intraday_cost_scenarios'={h2_intraday_cost_scenarios} must be between -1 and 1."
 
+    original_model = model.copy()
+    
     df_results = pd.DataFrame(columns=['wind_cost_scenario', 'pv_cost_scenario', 
                                        'h2_tank_cost_scenario','h2_intraday_cost_scenario',
                                        'investment_solar', 'investment_wind',
@@ -706,15 +728,15 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
         for h2_tank_cost, h2_intraday_cost in itertools.product(h2_tank_cost_scenarios, h2_intraday_cost_scenarios):
             print(f"H2 Tank = {h2_tank_cost} | H2 Intraday = {h2_intraday_cost}")
             
-            # Update Maximum Loss Load Parameter
-            # TODO IMPLEMENT!!
-            model.update_future_scenarios_params(wind_cost, pv_cost, h2_tank_cost, h2_intraday_cost)
+            # Update Investment Cost Parameter
+            model.update_future_scenarios_params(wind_cost_perc=wind_cost, pv_cost_perc=pv_cost,
+                                                 h2_tank_cost_perc=h2_tank_cost, h2_intraday_cost_perc=h2_intraday_cost)
     
             # Run MILP Model
             model.optimize()
             run_optimality_check(model)
 
-            # Get optimal OPERATIONAL Costs
+            # Get optimal INVESTMENT Costs
             cost_build_solar = sum(model.inst.costBuildSolar[i] * model.buildNumSolar[i].X for i in model.inst.SolarNodes)
             cost_build_wind  = sum(model.inst.costBuildWind[i] * model.buildNumWind[i].X for i in model.inst.WindNodes)
             cost_build_storage_gas = sum(model.inst.costBuildStorageGas[i] * model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
@@ -728,7 +750,7 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
                                         for i in model.inst.TankNodes for t in model.inst.TimePeriods)) for s in model.inst.Scenarios}
             operarional_costs = {s: cost_storage_gas[s] + cost_storage_liquid[s] for s in model.inst.Scenarios}
 
-            # Get optimal solution
+            # Get optimal INVESTMENT Solution
             num_wind_turbines = sum(model.buildNumWind[i].X for i in model.inst.WindNodes)
             num_pv_panels = sum(model.buildNumSolar[i].X for i in model.inst.SolarNodes)
             num_h2_tanks = sum(model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
@@ -754,6 +776,9 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
                 new_row[f"operational_cost_{s}"] = operarional_costs[s]
 
             df_results = pd.concat([df_results, pd.DataFrame(new_row, index=[0])], ignore_index=True)
+
+            # Reset model to original parameters
+            model = original_model
 
     return df_results
 
