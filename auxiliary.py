@@ -10,6 +10,7 @@ import numpy as np
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import itertools
+import copy
 
 @dataclass
 class InstanceMOPTA():
@@ -212,7 +213,7 @@ class InstanceMOPTA():
         self.costStorageGas           = df_temp['operational_cost_gas_storage'].iloc[0]
         self.costStorageLiquid        = df_temp['operational_cost_liquid_storage'].iloc[0]
         
-class ModelMOPTA(gp.Model):    
+class ModelMOPTA(gp.Model):
     def __init__(self, instance:InstanceMOPTA, **kwds):
         super().__init__(**kwds)
         self.__inst = instance
@@ -421,7 +422,7 @@ class ModelMOPTA(gp.Model):
             self.remove(self.getConstrByName(f"CmaxLossLoadElectricity[{s}]"))
             for i in self.inst.LoadNodes:
                 for t in self.inst.TimePeriods:
-                    self.remove(self.getConstrByName(f"CflowBalanceLoads[{i,t,s}]"))
+                    self.remove(self.getConstrByName(f"CflowBalanceLoads[{i},{t},{s}]"))
         self.update()
 
         # Update the electricity demand parameter
@@ -440,18 +441,11 @@ class ModelMOPTA(gp.Model):
         self.inst.costBuildStorageGas = self.inst.costBuildStorageGas * (1 + h2_intraday_cost_perc)
 
         # Reset Objective
-        # Investement Costs
-        cost_build_solar = sum(self.inst.costBuildSolar[i]*self.buildNumSolar[i] for i in self.inst.SolarNodes)
-        cost_build_wind  = sum(self.inst.costBuildWind[i]*self.buildNumWind[i] for i in self.inst.WindNodes)
+        self.setObjective(obj_cost(self), GRB.MINIMIZE)
 
-        cost_build_storage_gas = sum(self.inst.costBuildStorageGas[i]*self.buildNumStorageGas[i] for i in self.inst.ElectrolyzerNodes)
-        cost_build_storage_liquid = sum(self.inst.costBuildStorageLiquid[i]*self.buildNumStorageLiquid[i] for i in self.inst.TankNodes)
-
-        # Operational Costs
-        cost_storage_gas = sum(self.inst.scenarioWeight[s] * (sum(self.inst.costStorageGas*self.storageGasSoc[i,t,s] for i in self.inst.ElectrolyzerNodes for t in self.inst.TimePeriods)) for s in self.inst.Scenarios)
-        cost_storage_liquid = sum(self.inst.scenarioWeight[s] * (sum(self.inst.costStorageLiquid*self.storageLiquidSoc[i,t,s] for i in self.inst.TankNodes for t in self.inst.TimePeriods)) for s in self.inst.Scenarios)
-        
-        self.SetObjective(cost_build_solar + cost_build_wind + cost_build_storage_gas + cost_build_storage_liquid + cost_storage_gas + cost_storage_liquid)
+    def copy(self):
+        # Create a deep copy of the instance
+        return copy.deepcopy(self)
 
 #------------------------------------------------------------------------------
 # Auxiliary Functions to Define Constraints
@@ -702,16 +696,15 @@ def plot_economical_analysis(data_filename:str, scenario:int, scenario_name:str,
     plt.savefig(fig_filename, bbox_inches='tight', pad_inches=0.3)
     plt.close()
 
-def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv_cost_scenarios:list,
-                            h2_tank_cost_scenarios:list, h2_intraday_cost_scenarios:list, perc_demand:float=28.24):
+def run_future_scenarios_analysis(instance:InstanceMOPTA, wind_cost_scenarios:list,
+                                  pv_cost_scenarios:list, h2_tank_cost_scenarios:list,
+                                  h2_intraday_cost_scenarios:list, perc_demand:float=0.2824):
     
     assert (all(s >= -1 for s in wind_cost_scenarios) & all(s <= 1 for s in wind_cost_scenarios)), f"The parameters 'wind_cost_scenarios'={wind_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in pv_cost_scenarios) & all(s <= 1 for s in pv_cost_scenarios)), f"The parameters 'pv_cost_scenarios'={pv_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in h2_tank_cost_scenarios) & all(s <= 1 for s in h2_tank_cost_scenarios)), f"The parameters 'h2_tank_cost_scenarios'={h2_tank_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in h2_intraday_cost_scenarios) & all(s <= 1 for s in h2_intraday_cost_scenarios)), f"The parameters 'h2_intraday_cost_scenarios'={h2_intraday_cost_scenarios} must be between -1 and 1."
 
-    original_model = model.copy()
-    
     df_results = pd.DataFrame(columns=['wind_cost_scenario', 'pv_cost_scenario', 
                                        'h2_tank_cost_scenario','h2_intraday_cost_scenario',
                                        'investment_solar', 'investment_wind',
@@ -719,15 +712,18 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
                                        'investment_cost', 'operational_cost',
                                        'Sol_wind', 'Sol_pv', 'Sol_h2_tank', 'Sol_h2_intraday']
                                      + [f"operational_cost_{s}" for s in model.inst.Scenarios])
-    
-    # Update electricity demand accoring to expected increase
-    model.update_elect_demand(perc_demand)
 
     for wind_cost, pv_cost in itertools.product(wind_cost_scenarios, pv_cost_scenarios):
         print(f"Wind = {wind_cost} | PV = {pv_cost}")
         for h2_tank_cost, h2_intraday_cost in itertools.product(h2_tank_cost_scenarios, h2_intraday_cost_scenarios):
             print(f"H2 Tank = {h2_tank_cost} | H2 Intraday = {h2_intraday_cost}")
             
+            # Create model from instance
+            model = ModelMOPTA(instance)
+
+            # Update electricity demand accoring to expected increase
+            model.update_elect_demand(perc_demand)
+
             # Update Investment Cost Parameter
             model.update_future_scenarios_params(wind_cost_perc=wind_cost, pv_cost_perc=pv_cost,
                                                  h2_tank_cost_perc=h2_tank_cost, h2_intraday_cost_perc=h2_intraday_cost)
@@ -770,15 +766,12 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
                         'Sol_wind': num_wind_turbines,
                         'Sol_pv': num_pv_panels,
                         'Sol_h2_tank': num_h2_tanks,
-                        'Sol_h2_intraday': num_h2_intraday}
-        
+                        'Sol_h2_intraday': num_h2_intraday}      
             for s in model.inst.Scenarios:
                 new_row[f"operational_cost_{s}"] = operarional_costs[s]
 
             df_results = pd.concat([df_results, pd.DataFrame(new_row, index=[0])], ignore_index=True)
-
-            # Reset model to original parameters
-            model = original_model
+            model.dispose()
 
     return df_results
 
