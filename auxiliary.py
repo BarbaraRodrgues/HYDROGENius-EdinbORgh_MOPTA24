@@ -5,14 +5,11 @@
 # Python Libraries
 import gurobipy as gp
 from gurobipy import GRB
-
-import pyomo.environ as pyo
-from pyomo.opt import SolverResults, SolverStatus, TerminationCondition
-
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
+import itertools
 
 @dataclass
 class InstanceMOPTA():
@@ -664,5 +661,78 @@ def plot_economical_analysis(data_filename:str, scenario:int, scenario_name:str,
 
     plt.savefig(fig_filename, bbox_inches='tight', pad_inches=0.3)
     plt.close()
+
+
+def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv_cost_scenarios:list,
+                            h2_tank_cost_scenarios:list, h2_intraday_cost_scenarios:list):
+    assert (all(s >= -1 for s in wind_cost_scenarios) & all(s <= 1 for s in wind_cost_scenarios)), f"The parameters 'wind_cost_scenarios'={wind_cost_scenarios} must be between -1 and 1."
+    assert (all(s >= -1 for s in pv_cost_scenarios) & all(s <= 1 for s in pv_cost_scenarios)), f"The parameters 'pv_cost_scenarios'={pv_cost_scenarios} must be between -1 and 1."
+    assert (all(s >= -1 for s in h2_tank_cost_scenarios) & all(s <= 1 for s in h2_tank_cost_scenarios)), f"The parameters 'h2_tank_cost_scenarios'={h2_tank_cost_scenarios} must be between -1 and 1."
+    assert (all(s >= -1 for s in h2_intraday_cost_scenarios) & all(s <= 1 for s in h2_intraday_cost_scenarios)), f"The parameters 'h2_intraday_cost_scenarios'={h2_intraday_cost_scenarios} must be between -1 and 1."
+
+    df_results = pd.DataFrame(columns=['wind_cost_scenario', 'pv_cost_scenario', 
+                                       'h2_tank_cost_scenario','h2_intraday_cost_scenario',
+                                       'investment_solar', 'investment_wind',
+                                       'investment_storage_gas','investment_storage_liquid',
+                                       'investment_cost', 'operational_cost',
+                                       'Sol_wind', 'Sol_pv', 'Sol_h2_tank', 'Sol_h2_intraday']
+                                     + [f"operational_cost_{s}" for s in model.inst.Scenarios])
+    
+    for wind_cost, pv_cost in itertools.product(wind_cost_scenarios, pv_cost_scenarios):
+        print(f"Wind = {wind_cost} | PV = {pv_cost}")
+        for h2_tank_cost, h2_intraday_cost in itertools.product(h2_tank_cost_scenarios, h2_intraday_cost_scenarios):
+            print(f"H2 Tank = {h2_tank_cost} | H2 Intraday = {h2_intraday_cost}")
+            
+            # Update Maximum Loss Load Parameter
+            # TODO IMPLEMENT!!
+            model.update_future_scenarios_params(wind_cost, pv_cost, h2_tank_cost, h2_intraday_cost)
+    
+            # Run MILP Model
+            model.optimize()
+            run_optimality_check(model)
+
+            # Get optimal OPERATIONAL Costs
+            cost_build_solar = sum(model.inst.costBuildSolar[i] * model.buildNumSolar[i].X for i in model.inst.SolarNodes)
+            cost_build_wind  = sum(model.inst.costBuildWind[i] * model.buildNumWind[i].X for i in model.inst.WindNodes)
+            cost_build_storage_gas = sum(model.inst.costBuildStorageGas[i] * model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
+            cost_build_storage_liquid = sum(model.inst.costBuildStorageLiquid[i] * model.buildNumStorageLiquid[i].X for i in model.inst.TankNodes)
+            investment_cost = cost_build_solar + cost_build_wind + cost_build_storage_gas + cost_build_storage_liquid 
+            
+            # Get optimal OPERATIONAL Costs
+            cost_storage_gas = {s: (sum(model.inst.costStorageGas * model.getVarByName(f"storageGasSoc[{i},{t},{s}]").X\
+                                        for i in model.inst.ElectrolyzerNodes for t in model.inst.TimePeriods)) for s in model.inst.Scenarios}
+            cost_storage_liquid = {s: (sum(model.inst.costStorageLiquid * model.getVarByName(f"storageLiquidSoc[{i},{t},{s}]").X\
+                                        for i in model.inst.TankNodes for t in model.inst.TimePeriods)) for s in model.inst.Scenarios}
+            operarional_costs = {s: cost_storage_gas[s] + cost_storage_liquid[s] for s in model.inst.Scenarios}
+
+            # Get optimal solution
+            num_wind_turbines = sum(model.buildNumWind[i].X for i in model.inst.WindNodes)
+            num_pv_panels = sum(model.buildNumSolar[i].X for i in model.inst.SolarNodes)
+            num_h2_tanks = sum(model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
+            num_h2_intraday = sum(model.buildNumStorageLiquid[i].X for i in model.inst.TankNodes)
+            
+            # Update dataframe of results
+            new_row = {'wind_cost_scenario': wind_cost, 
+                        'pv_cost_scenario': pv_cost, 
+                        'h2_tank_cost_scenario': h2_tank_cost, 
+                        'h2_intraday_cost_scenario': h2_intraday_cost,
+                        'investment_solar': cost_build_solar,
+                        'investment_wind': cost_build_wind,
+                        'investment_storage_gas': cost_build_storage_gas,
+                        'investment_storage_liquid': cost_build_storage_liquid,
+                        'investment_cost': investment_cost,
+                        'operational_cost': sum(operarional_costs[s] for s in model.inst.Scenarios),
+                        'Sol_wind': num_wind_turbines,
+                        'Sol_pv': num_pv_panels,
+                        'Sol_h2_tank': num_h2_tanks,
+                        'Sol_h2_intraday': num_h2_intraday}
+        
+            for s in model.inst.Scenarios:
+                new_row[f"operational_cost_{s}"] = operarional_costs[s]
+
+            df_results = pd.concat([df_results, pd.DataFrame(new_row, index=[0])], ignore_index=True)
+
+    return df_results
+
 
 ### END
