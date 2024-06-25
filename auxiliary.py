@@ -412,6 +412,26 @@ class ModelMOPTA(gp.Model):
         self.addConstrs((cons_max_loss_load_electricity(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadElectricity")
         self.addConstrs((cons_max_loss_load_gas(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadGas")
         self.update()
+    
+    def update_elect_demand(self, perc_demand:float):
+        assert (perc_demand >= 0) & (perc_demand <= 1), f"The parameter perc_demand={perc_demand} must be a percentage between 0 and 1."
+        
+        # Remove constraints where the electricity demand parameter appear
+        for s in self.inst.Scenarios:
+            self.remove(self.getConstrByName(f"CmaxLossLoadElectricity[{s}]"))
+            for i in self.inst.LoadNodes:
+                for t in self.inst.TimePeriods:
+                    self.remove(self.getConstrByName(f"CflowBalanceLoads[{i,t,s}]"))
+        self.update()
+
+        # Update the electricity demand parameter
+        self.inst.demandElectricity = self.inst.demandElectricity * (1 + perc_demand)
+
+        # Add the electricity demand constraints again
+        self.addConstrs((cons_flow_balance_loads(self, i, t, s) for i in self.inst.LoadNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceLoads")
+        self.addConstrs((cons_max_loss_load_electricity(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadElectricity")
+        self.update()
+
 
 #------------------------------------------------------------------------------
 # Auxiliary Functions to Define Constraints
@@ -662,9 +682,9 @@ def plot_economical_analysis(data_filename:str, scenario:int, scenario_name:str,
     plt.savefig(fig_filename, bbox_inches='tight', pad_inches=0.3)
     plt.close()
 
-
 def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv_cost_scenarios:list,
-                            h2_tank_cost_scenarios:list, h2_intraday_cost_scenarios:list):
+                            h2_tank_cost_scenarios:list, h2_intraday_cost_scenarios:list, perc_demand:float=28.24):
+    
     assert (all(s >= -1 for s in wind_cost_scenarios) & all(s <= 1 for s in wind_cost_scenarios)), f"The parameters 'wind_cost_scenarios'={wind_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in pv_cost_scenarios) & all(s <= 1 for s in pv_cost_scenarios)), f"The parameters 'pv_cost_scenarios'={pv_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in h2_tank_cost_scenarios) & all(s <= 1 for s in h2_tank_cost_scenarios)), f"The parameters 'h2_tank_cost_scenarios'={h2_tank_cost_scenarios} must be between -1 and 1."
@@ -678,6 +698,9 @@ def run_future_scenarios_analysis(model:ModelMOPTA, wind_cost_scenarios:list, pv
                                        'Sol_wind', 'Sol_pv', 'Sol_h2_tank', 'Sol_h2_intraday']
                                      + [f"operational_cost_{s}" for s in model.inst.Scenarios])
     
+    # Update electricity demand accoring to expected increase
+    model.update_elect_demand(perc_demand)
+
     for wind_cost, pv_cost in itertools.product(wind_cost_scenarios, pv_cost_scenarios):
         print(f"Wind = {wind_cost} | PV = {pv_cost}")
         for h2_tank_cost, h2_intraday_cost in itertools.product(h2_tank_cost_scenarios, h2_intraday_cost_scenarios):
