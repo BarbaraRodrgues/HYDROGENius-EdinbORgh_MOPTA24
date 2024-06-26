@@ -10,7 +10,6 @@ import numpy as np
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import itertools
-import copy
 
 @dataclass
 class InstanceMOPTA():
@@ -414,26 +413,7 @@ class ModelMOPTA(gp.Model):
         self.addConstrs((cons_max_loss_load_gas(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadGas")
         self.update()
     
-    def update_elect_demand(self, perc_demand:float):
-        assert (perc_demand >= 0) & (perc_demand <= 1), f"The parameter perc_demand={perc_demand} must be a percentage between 0 and 1."
-        
-        # Remove constraints where the electricity demand parameter appear
-        for s in self.inst.Scenarios:
-            self.remove(self.getConstrByName(f"CmaxLossLoadElectricity[{s}]"))
-            for i in self.inst.LoadNodes:
-                for t in self.inst.TimePeriods:
-                    self.remove(self.getConstrByName(f"CflowBalanceLoads[{i},{t},{s}]"))
-        self.update()
-
-        # Update the electricity demand parameter
-        self.inst.demandElectricity = self.inst.demandElectricity * (1 + perc_demand)
-
-        # Add the electricity demand constraints again
-        self.addConstrs((cons_flow_balance_loads(self, i, t, s) for i in self.inst.LoadNodes for t in self.inst.TimePeriods for s in self.inst.Scenarios), name="CflowBalanceLoads")
-        self.addConstrs((cons_max_loss_load_electricity(self, s) for s in self.inst.Scenarios), name="CmaxLossLoadElectricity")
-        self.update()
-    
-    def update_future_scenarios_params(self, wind_cost_perc:float, pv_cost_perc:float, h2_tank_cost_perc:float, h2_intraday_cost_perc:float):
+    def update_investment_costs(self, wind_cost_perc:float, pv_cost_perc:float, h2_tank_cost_perc:float, h2_intraday_cost_perc:float):
         # Update the cost parameters
         self.inst.costBuildWind = self.inst.costBuildWind * (1 + wind_cost_perc)
         self.inst.costBuildSolar = self.inst.costBuildSolar * (1 + pv_cost_perc)
@@ -442,10 +422,6 @@ class ModelMOPTA(gp.Model):
 
         # Reset Objective
         self.setObjective(obj_cost(self), GRB.MINIMIZE)
-
-    def copy(self):
-        # Create a deep copy of the instance
-        return copy.deepcopy(self)
 
 #------------------------------------------------------------------------------
 # Auxiliary Functions to Define Constraints
@@ -698,7 +674,7 @@ def plot_economical_analysis(data_filename:str, scenario:int, scenario_name:str,
 
 def run_future_scenarios_analysis(instance:InstanceMOPTA, wind_cost_scenarios:list,
                                   pv_cost_scenarios:list, h2_tank_cost_scenarios:list,
-                                  h2_intraday_cost_scenarios:list, perc_demand:float=0.2824):
+                                  h2_intraday_cost_scenarios:list):
     
     assert (all(s >= -1 for s in wind_cost_scenarios) & all(s <= 1 for s in wind_cost_scenarios)), f"The parameters 'wind_cost_scenarios'={wind_cost_scenarios} must be between -1 and 1."
     assert (all(s >= -1 for s in pv_cost_scenarios) & all(s <= 1 for s in pv_cost_scenarios)), f"The parameters 'pv_cost_scenarios'={pv_cost_scenarios} must be between -1 and 1."
@@ -711,22 +687,18 @@ def run_future_scenarios_analysis(instance:InstanceMOPTA, wind_cost_scenarios:li
                                        'investment_storage_gas','investment_storage_liquid',
                                        'investment_cost', 'operational_cost',
                                        'Sol_wind', 'Sol_pv', 'Sol_h2_tank', 'Sol_h2_intraday']
-                                     + [f"operational_cost_{s}" for s in model.inst.Scenarios])
+                                     + [f"operational_cost_{s}" for s in range(1,10)])
 
     for wind_cost, pv_cost in itertools.product(wind_cost_scenarios, pv_cost_scenarios):
-        print(f"Wind = {wind_cost} | PV = {pv_cost}")
         for h2_tank_cost, h2_intraday_cost in itertools.product(h2_tank_cost_scenarios, h2_intraday_cost_scenarios):
+            print(f"Wind = {wind_cost} | PV = {pv_cost}")
             print(f"H2 Tank = {h2_tank_cost} | H2 Intraday = {h2_intraday_cost}")
             
             # Create model from instance
             model = ModelMOPTA(instance)
 
-            # Update electricity demand accoring to expected increase
-            model.update_elect_demand(perc_demand)
-
             # Update Investment Cost Parameter
-            model.update_future_scenarios_params(wind_cost_perc=wind_cost, pv_cost_perc=pv_cost,
-                                                 h2_tank_cost_perc=h2_tank_cost, h2_intraday_cost_perc=h2_intraday_cost)
+            model.update_investment_costs(wind_cost, pv_cost, h2_tank_cost, h2_intraday_cost)
     
             # Run MILP Model
             model.optimize()
