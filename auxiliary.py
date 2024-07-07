@@ -672,14 +672,9 @@ def plot_economical_analysis(data_filename:str, scenario:int, scenario_name:str,
     plt.savefig(fig_filename, bbox_inches='tight', pad_inches=0.3)
     plt.close()
 
-def run_future_scenarios_analysis(instance:InstanceMOPTA, wind_cost_scenarios:list,
-                                  pv_cost_scenarios:list, h2_tank_cost_scenarios:list,
-                                  h2_intraday_cost_scenarios:list):
-    
-    assert (all(s >= -1 for s in wind_cost_scenarios) & all(s <= 1 for s in wind_cost_scenarios)), f"The parameters 'wind_cost_scenarios'={wind_cost_scenarios} must be between -1 and 1."
-    assert (all(s >= -1 for s in pv_cost_scenarios) & all(s <= 1 for s in pv_cost_scenarios)), f"The parameters 'pv_cost_scenarios'={pv_cost_scenarios} must be between -1 and 1."
-    assert (all(s >= -1 for s in h2_tank_cost_scenarios) & all(s <= 1 for s in h2_tank_cost_scenarios)), f"The parameters 'h2_tank_cost_scenarios'={h2_tank_cost_scenarios} must be between -1 and 1."
-    assert (all(s >= -1 for s in h2_intraday_cost_scenarios) & all(s <= 1 for s in h2_intraday_cost_scenarios)), f"The parameters 'h2_intraday_cost_scenarios'={h2_intraday_cost_scenarios} must be between -1 and 1."
+def run_future_scenarios_analysis(wind_cost_scenarios:list, pv_cost_scenarios:list,
+                                  h2_tank_cost_scenarios:list, h2_intraday_cost_scenarios:list):
+    gp.setParam("LogToConsole", 0)
 
     df_results = pd.DataFrame(columns=['wind_cost_scenario', 'pv_cost_scenario', 
                                        'h2_tank_cost_scenario','h2_intraday_cost_scenario',
@@ -688,17 +683,18 @@ def run_future_scenarios_analysis(instance:InstanceMOPTA, wind_cost_scenarios:li
                                        'investment_cost', 'operational_cost',
                                        'Sol_wind', 'Sol_pv', 'Sol_h2_tank', 'Sol_h2_intraday']
                                      + [f"operational_cost_{s}" for s in range(1,10)])
-
+    
     for wind_cost, pv_cost in itertools.product(wind_cost_scenarios, pv_cost_scenarios):
         for h2_tank_cost, h2_intraday_cost in itertools.product(h2_tank_cost_scenarios, h2_intraday_cost_scenarios):
-            print(f"Wind = {wind_cost} | PV = {pv_cost}")
-            print(f"H2 Tank = {h2_tank_cost} | H2 Intraday = {h2_intraday_cost}")
+            print(f"Wind = {wind_cost} | PV = {pv_cost} | H2 Tank = {h2_tank_cost} | H2 Intraday = {h2_intraday_cost}")
             
             # Create model from instance
-            model = ModelMOPTA(instance)
+            model = ModelMOPTA(InstanceMOPTA('Instances\stochastic_instance_2050.xlsx'))
 
             # Update Investment Cost Parameter
+            print("BEFORE UPDATE", model.inst.costBuildWind)
             model.update_investment_costs(wind_cost, pv_cost, h2_tank_cost, h2_intraday_cost)
+            print("AFTER UPDATE", model.inst.costBuildWind)
     
             # Run MILP Model
             model.optimize()
