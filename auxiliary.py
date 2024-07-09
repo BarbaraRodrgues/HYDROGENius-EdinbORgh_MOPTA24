@@ -692,10 +692,8 @@ def run_future_scenarios_analysis(wind_cost_scenarios:list, pv_cost_scenarios:li
             model = ModelMOPTA(InstanceMOPTA('Instances\stochastic_instance_2050.xlsx'))
 
             # Update Investment Cost Parameter
-            print("BEFORE UPDATE", model.inst.costBuildWind)
             model.update_investment_costs(wind_cost, pv_cost, h2_tank_cost, h2_intraday_cost)
-            print("AFTER UPDATE", model.inst.costBuildWind)
-    
+
             # Run MILP Model
             model.optimize()
             run_optimality_check(model)
@@ -717,9 +715,9 @@ def run_future_scenarios_analysis(wind_cost_scenarios:list, pv_cost_scenarios:li
             # Get optimal INVESTMENT Solution
             num_wind_turbines = sum(model.buildNumWind[i].X for i in model.inst.WindNodes)
             num_pv_panels = sum(model.buildNumSolar[i].X for i in model.inst.SolarNodes)
-            num_h2_tanks = sum(model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
-            num_h2_intraday = sum(model.buildNumStorageLiquid[i].X for i in model.inst.TankNodes)
-            
+            num_h2_tanks = sum(model.buildNumStorageLiquid[i].X for i in model.inst.TankNodes)
+            num_h2_intraday = sum(model.buildNumStorageGas[i].X for i in model.inst.ElectrolyzerNodes)
+
             # Update dataframe of results
             new_row = {'wind_cost_scenario': wind_cost, 
                         'pv_cost_scenario': pv_cost, 
