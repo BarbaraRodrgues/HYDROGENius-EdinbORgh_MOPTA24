@@ -741,5 +741,37 @@ def run_future_scenarios_analysis(wind_cost_scenarios:list, pv_cost_scenarios:li
 
     return df_results
 
+def plot_investment_analysis(data_filename:str='Investment Analysis/future_cases_analysis_wind_vs_pv.csv',
+                             z_name:str='Sol_wind',
+                             z_title = '# Turbines Build \n in Optimal Solution',
+                             fig_filename:str = "Investment Analysis/Turbines_w_changes_wind_pv.pdf",
+                             num_tol:int=0.00001):
+    # Read data and save column names
+    df = pd.read_csv(data_filename)
+    x_name = 'wind_cost_scenario'
+    y_name = 'pv_cost_scenario'
+    df[x_name] = df[x_name] * 100
+    df[y_name] = df[y_name] * 100
+
+    # 2D-arrays from DataFrame
+    x1 = np.linspace(df[x_name].min(), df[x_name].max(), len(df[x_name].unique()))
+    y1 = np.linspace(df[y_name].min(), df[y_name].max(), len(df[y_name].unique()))
+    x, y = np.meshgrid(x1, y1)
+
+    n_row, n_col = x.shape
+    z = np.absolute(np.array([[float(df.loc[(np.abs(df[x_name]-x[i,j])<num_tol) & (np.abs(df[y_name]-y[i,j])<num_tol), z_name])
+                                for j in range(n_col)] for i in range(n_row)]))    
+    # Set up axes and put data on the surface
+    fig = plt.figure()
+    axes = fig.add_subplot(projection='3d')
+    axes.plot_surface(x, y, z, cmap='RdYlGn')
+
+    # Customize labels
+    axes.set_xlabel('Change in Wind \n Investement Cost (%)')
+    axes.set_ylabel('\n Change in PV \n Investement Cost  (%)')
+    axes.set_title(z_title) 
+
+    plt.savefig(fig_filename, bbox_inches='tight', pad_inches=0.3)
+    plt.close()
 
 ### END

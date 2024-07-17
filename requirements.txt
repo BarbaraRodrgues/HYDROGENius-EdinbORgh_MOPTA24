@@ -6,3 +6,4 @@ streamlit
 streamlit_pdf_viewer
 matplotlib
 plotly
+seaborn
