@@ -75,14 +75,14 @@ else:
     # Pie Plot of Investment Costs
     cost_list = [cost_build_solar, cost_build_wind, cost_build_storage_gas, cost_build_storage_liquid]
     cost_names = ['Cost Building Solar Plants', 'Cost Building Wind Plants',
-                  'Cost Building Hydrogen Gas Storage','Cost Building Liquid Hydrogen Storage']
+                  'Cost Building H2 Gas Storage','Cost Building Liquid H2 Tanks']
     df = pd.DataFrame(cost_list, index=cost_names, columns=['Cost Percentage'])
     df.index.name = 'Cost Type'
     df = df.apply(lambda x: 100*x/total_investment).reset_index()
     fig = px.pie(df, values = 'Cost Percentage', names = 'Cost Type')
-    fig.update_traces(sort=False) 
+    fig.update_traces(sort=False, textinfo='value')
     col1.plotly_chart(fig, theme="streamlit", use_container_width=True)
-    
+
     # Values
     col2.write("##")
     col2.write("##")
